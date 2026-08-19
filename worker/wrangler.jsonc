@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "team-app-jobs",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-19",
+  "observability": { "enabled": true },
+  "vars": {
+    "APP_ORIGIN": "https://team-app.pages.dev"
+  },
+  "triggers": {
+    "crons": ["15 * * * *"]
+  }
+}

@@ -26,7 +26,7 @@ assert.ok(!app.includes('const POSITIONS ='),'legacy hard-coded position constan
 assert.ok(!app.includes('POSITION_NAMES ='),'legacy hard-coded position names returned');
 assert.ok(!app.includes('pos-${pos.toLowerCase()}'),'position placement must not depend on baseball CSS classes');
 assert.match(manifest.name,/Coach/,'PWA manifest should describe coach product');
-assert.ok(/team-app-live-v1\.9\.0/.test(sw),'cache version not bumped');
+assert.ok(/team-app-live-v1\.10\.0/.test(sw),'cache version not bumped');
 assert.ok(html.indexOf('./core/e2ee.js')<html.indexOf('./cloud-client.js'),'E2EE runtime must load before cloud client');
 assert.ok(html.indexOf('./cloud-client.js')<html.indexOf('./app.js'),'cloud client must load before app');
 assert.ok(app.includes('function renderCoachCenter()'),'coach center missing');
@@ -35,14 +35,14 @@ assert.ok(app.includes('function saveDocumentFromForm'),'team document workflow 
 
 assert.ok(!app.includes("date:'2026-08-21'"),'new events must not use a hard-coded historical date');
 const serverIndex=fs.readFileSync(path.join(root,'server/src/index.js'),'utf8');
-assert.ok(serverIndex.includes("version:'1.9.0'"),'health endpoint version must match V1.9');
-assert.ok(serverIndex.includes('Team APP V1.9 listening'),'server banner must match V1.9');
+assert.ok(serverIndex.includes("version:'1.10.0'"),'health endpoint version must match V1.10');
+assert.ok(serverIndex.includes('Team APP V1.10 listening'),'server banner must match V1.10');
 
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-assert.match(pkg.scripts.dev,/serve-static/,'default dev command must preview the Vercel/static architecture');
+assert.match(pkg.scripts.dev,/serve-static/,'default dev command must preview the Cloudflare/static architecture');
 assert.match(pkg.scripts.start,/serve-static/,'default start command must serve built static output');
 assert.ok(!/server\/src\/index/.test(pkg.scripts.dev||''),'default dev command must not launch legacy Express server');
-assert.ok(app.includes("const STORAGE_KEY = 'team-app-service-v1.9-state'"),'active local storage key must match V1.9');
-assert.ok(app.includes("'team-app-service-v1.8-state'"),'V1.8 local state must remain migratable');
+assert.ok(app.includes("const STORAGE_KEY = 'team-app-service-v1.10-state'"),'active local storage key must match V1.10');
+assert.ok(app.includes("'team-app-service-v1.9-state'"),'V1.9 local state must remain migratable');
 assert.ok(app.includes('function localDateValue('),'event date defaults must use local calendar date');
 console.log('PASS static architecture contract');

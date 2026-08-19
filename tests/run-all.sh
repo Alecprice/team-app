@@ -57,9 +57,12 @@ run_batch 'Adapter behavior browser contracts' \
   'Formation/layout variants' tests/e2e_layouts.py \
   'Team default layouts' tests/e2e_default_layouts.py
 
-run_batch 'Responsive + stress browser contracts' \
+run_batch 'Responsive + security + stress browser contracts' \
   'Layout chaos stress' tests/e2e_layout_chaos.py \
   'Six-sport responsive smoke' tests/e2e_smoke.py \
-  'Heavy mobile data stress' tests/e2e_stress.py
+  'Hostile input / XSS' tests/e2e_xss.py \
+  'Mobile accessibility labels' tests/e2e_accessibility.py \
+  'Heavy mobile data stress' tests/e2e_stress.py \
+  'Extreme season stress' tests/e2e_extreme_stress.py
 
-echo 'ALL TEAM APP V1.9 TESTS PASSED'
+echo 'ALL TEAM APP V1.10 TESTS PASSED'

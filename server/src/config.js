@@ -29,6 +29,7 @@ export const config = Object.freeze({
   vapidSubject: env('VAPID_SUBJECT','mailto:admin@example.com'),
   cronSecret: env('CRON_SECRET'),
   maxUploadBytes: envInt('TEAM_APP_MAX_UPLOAD_MB',25)*1024*1024,
+  maxTeamDocumentBytes: envInt('TEAM_APP_MAX_TEAM_STORAGE_MB',500)*1024*1024,
 });
 
 export function assertProductionConfig(){

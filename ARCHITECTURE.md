@@ -1,4 +1,4 @@
-# Team APP V1.9 Architecture
+# Team APP V1.8 Architecture
 
 ## Product layers
 
@@ -62,7 +62,7 @@ Every team owns its own context. Team switching cannot carry another team's rost
 
 ## Cloud synchronization boundary
 
-V1.9 uses a compatibility snapshot while the prototype migrates toward fully relational cloud records.
+V1.8 uses a compatibility snapshot while the prototype migrates toward fully relational cloud records.
 
 ### Public operational snapshot
 
@@ -117,4 +117,4 @@ The weather monitor intentionally reads event time/location from the operational
 
 ## Current migration strategy
 
-The offline PWA remains functional while cloud records are introduced. V1.9 uses revisioned team snapshots as a compatibility bridge. The long-term schema in `schema.sql` retains relational lineup, game, practice, learning and sport tables so high-value cloud workflows can be normalized incrementally without forcing a rewrite of the coaching UX.
+The offline PWA remains functional while cloud records are introduced. V1.8 uses revisioned team snapshots as a compatibility bridge. The long-term schema in `schema.sql` retains relational lineup, game, practice, learning and sport tables so high-value cloud workflows can be normalized incrementally without forcing a rewrite of the coaching UX.

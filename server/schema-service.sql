@@ -75,6 +75,8 @@ create table if not exists form_assignments (
   created_at timestamptz not null default now()
 );
 
+create unique index if not exists uq_form_assignments_target on form_assignments(form_template_id,assigned_user_id,coalesce(athlete_id,'00000000-0000-0000-0000-000000000000'::uuid));
+
 create table if not exists form_submissions (
   id uuid primary key default gen_random_uuid(),
   form_template_id uuid not null references form_templates(id) on delete cascade,
@@ -112,6 +114,7 @@ create table if not exists conversation_key_envelopes (
   conversation_id uuid not null references conversations(id) on delete cascade,
   recipient_user_id uuid not null references users(id) on delete cascade,
   sender_user_id uuid not null references users(id),
+  sender_public_key_jwk jsonb,
   key_version int not null default 1,
   wrapped_key bytea not null,
   nonce bytea not null,
@@ -119,6 +122,7 @@ create table if not exists conversation_key_envelopes (
   created_at timestamptz not null default now(),
   primary key(conversation_id,recipient_user_id,key_version)
 );
+alter table conversation_key_envelopes add column if not exists sender_public_key_jwk jsonb;
 
 create table if not exists message_reads (
   conversation_id uuid not null references conversations(id) on delete cascade,

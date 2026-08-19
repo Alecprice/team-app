@@ -1,4 +1,4 @@
-# Team APP Roadmap — after V1.9
+# Team APP Roadmap — after V1.10 Hardening
 
 ## Implemented baseline
 
@@ -22,6 +22,17 @@
 - guardian event availability
 - Little League Baseball age-based pitch/rest guidance
 - production Docker/deployment scripts
+
+## Release gates before real-family launch
+
+- materialize the exact V1.10 source in GitHub and generate/commit `package-lock.json`
+- deploy the candidate to Cloudflare Pages over HTTPS and verify real response headers
+- apply the QA-verified Neon V1.10 upgrade to staging before production
+- complete real Neon Auth/Data API HTTP tests
+- complete two-device concurrency and offline/reconnect tests
+- decide E2EE lost-device recovery requirements
+- decide whether coach-private notes require client-side encryption
+- validate closed-app Web Push before enabling it for families
 
 ## Next normalization pass
 

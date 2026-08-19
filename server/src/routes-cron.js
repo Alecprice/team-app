@@ -3,10 +3,8 @@ import {query} from './db.js';
 import {config} from './config.js';
 import {forecastFor,weatherMeaningfullyChanged} from './weather.js';
 import {notifyTeam} from './notifications.js';
+import {localEventDate} from './time-zone.js';
 const router=express.Router();
-
-function zoneOffsetMs(date,timeZone){const parts=new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date).reduce((o,p)=>(o[p.type]=p.value,o),{});return Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day),Number(parts.hour),Number(parts.minute),Number(parts.second))-date.getTime();}
-function localEventDate(date,time,timeZone='UTC'){const base=new Date(`${date}T${time}:00Z`);let result=new Date(base.getTime()-zoneOffsetMs(base,timeZone));result=new Date(base.getTime()-zoneOffsetMs(result,timeZone));return result;}
 function authCron(req){const token=req.get('authorization')?.replace(/^Bearer\s+/i,'')||req.query.secret;return config.cronSecret&&token===config.cronSecret;}
 
 router.post('/cron/weather',async(req,res,next)=>{try{

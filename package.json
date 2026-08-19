@@ -1,24 +1,25 @@
 {
   "name": "team-app",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
-  "description": "Team APP mobile-first multi-sport coaching and team operations PWA using Vercel and Neon.",
+  "description": "Team APP mobile-first multi-sport coaching and team operations PWA using Cloudflare Pages/Workers and Neon.",
   "engines": {
-    "node": ">=20"
+    "node": ">=20 <25"
   },
   "scripts": {
     "dev": "npm run build && node scripts/serve-static.js",
     "start": "node scripts/serve-static.js",
-    "build": "node scripts/build-vercel.js",
+    "build": "node scripts/build-cloudflare.js",
     "build:client": "node server/scripts/build-client.js",
     "test": "bash tests/run-all.sh && node --test server/tests/*.test.js",
     "test:service": "node --test server/tests/*.test.js",
-    "build:vercel": "node scripts/build-vercel.js"
+    "build:cloudflare": "node scripts/build-cloudflare.js"
   },
   "dependencies": {
-    "@neondatabase/neon-js": "^1.0.0"
+    "@neondatabase/neon-js": "0.6.2-beta"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "0.28.1",
+    "wrangler": "4.123.0"
   }
 }
