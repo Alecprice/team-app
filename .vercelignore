@@ -1,0 +1,10 @@
+.git
+.github
+server
+sql
+tests
+types
+*.md
+schema.sql
+Dockerfile
+.env*

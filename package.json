@@ -1,8 +1,8 @@
 {
-  "name": "team-app-live",
+  "name": "team-app",
   "version": "1.9.0",
   "private": true,
-  "description": "Team APP mobile-first multi-sport coaching and team operations PWA on Vercel + Neon.",
+  "description": "Team APP mobile-first multi-sport coaching and team operations PWA using Vercel and Neon.",
   "engines": {
     "node": ">=20"
   },
