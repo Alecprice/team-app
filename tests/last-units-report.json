@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "sport": "football",
+  "units": [
+    "offense",
+    "defense",
+    "special"
+  ],
+  "unit_assignment_isolation": true,
+  "gameday_units": true,
+  "viewport": "390x844"
+}

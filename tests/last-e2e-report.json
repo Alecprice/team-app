@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "results": [
+    {
+      "viewport": "small-mobile-320x568",
+      "sports": 6,
+      "shared_views": 5,
+      "status": "PASS"
+    },
+    {
+      "viewport": "mobile-390x844",
+      "sports": 6,
+      "shared_views": 5,
+      "status": "PASS"
+    },
+    {
+      "viewport": "mobile-landscape-844x390",
+      "sports": 6,
+      "shared_views": 5,
+      "status": "PASS"
+    },
+    {
+      "viewport": "desktop-1440x900",
+      "sports": 6,
+      "shared_views": 5,
+      "status": "PASS"
+    }
+  ]
+}

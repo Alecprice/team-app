@@ -1,0 +1,12 @@
+import express from 'express';
+import {z} from 'zod';
+import {requireIdentity,requireTeamRole} from './access.js';
+import {registerPush} from './push.js';
+import {query} from './db.js';
+import {config} from './config.js';
+const router=express.Router();router.use(requireIdentity);
+router.get('/push/public-key',(req,res)=>res.json({publicKey:config.vapidPublicKey||null,enabled:Boolean(config.vapidPublicKey&&config.vapidPrivateKey)}));
+router.post('/push/subscribe',async(req,res,next)=>{try{await registerPush(req.teamApp.user.id,req.body?.subscription,req.get('user-agent')||'');res.status(201).json({ok:true});}catch(e){next(e);}});
+router.get('/teams/:teamId/notification-preferences',requireTeamRole(null),async(req,res,next)=>{try{const {rows}=await query('select messages,schedule,weather,documents,forms from notification_preferences where user_id=$1 and team_id=$2',[req.teamApp.user.id,req.params.teamId]);res.json(rows[0]||{messages:true,schedule:true,weather:true,documents:true,forms:true});}catch(e){next(e);}});
+router.put('/teams/:teamId/notification-preferences',requireTeamRole(null),async(req,res,next)=>{try{const b=z.object({messages:z.boolean(),schedule:z.boolean(),weather:z.boolean(),documents:z.boolean(),forms:z.boolean()}).parse(req.body);await query(`insert into notification_preferences(user_id,team_id,messages,schedule,weather,documents,forms) values($1,$2,$3,$4,$5,$6,$7) on conflict(user_id,team_id) do update set messages=excluded.messages,schedule=excluded.schedule,weather=excluded.weather,documents=excluded.documents,forms=excluded.forms,updated_at=now()`,[req.teamApp.user.id,req.params.teamId,b.messages,b.schedule,b.weather,b.documents,b.forms]);res.json({ok:true});}catch(e){next(e);}});
+export default router;

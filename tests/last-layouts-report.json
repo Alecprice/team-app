@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "soccer": "per-period formations + duplicate ST role slots",
+  "volleyball": "6 rotation layouts",
+  "football": "unit-isolated formations",
+  "gameday": "layout snapshot isolation",
+  "viewport": "390x844"
+}

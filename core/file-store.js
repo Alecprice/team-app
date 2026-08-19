@@ -1,0 +1,10 @@
+(function(root){
+  'use strict';
+  const DB_NAME='team-app-files';const DB_VERSION=1;const STORE='files';
+  function openDb(){return new Promise((resolve,reject)=>{if(!('indexedDB' in root)){reject(new Error('IndexedDB unavailable'));return;}const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'key'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Could not open file store'));});}
+  async function put(teamId,fileId,file){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put({key:`${teamId}:${fileId}`,teamId,fileId,name:file.name,type:file.type,size:file.size,lastModified:file.lastModified||Date.now(),blob:file});tx.oncomplete=()=>{db.close();resolve(true);};tx.onerror=()=>{db.close();reject(tx.error);};});}
+  async function get(teamId,fileId){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly');const req=tx.objectStore(STORE).get(`${teamId}:${fileId}`);req.onsuccess=()=>{db.close();resolve(req.result||null);};req.onerror=()=>{db.close();reject(req.error);};});}
+  async function remove(teamId,fileId){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(`${teamId}:${fileId}`);tx.oncomplete=()=>{db.close();resolve(true);};tx.onerror=()=>{db.close();reject(tx.error);};});}
+  async function removeTeam(teamId){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');const store=tx.objectStore(STORE);const req=store.openCursor();req.onsuccess=()=>{const c=req.result;if(c){if(c.value.teamId===teamId)c.delete();c.continue();}};tx.oncomplete=()=>{db.close();resolve(true);};tx.onerror=()=>{db.close();reject(tx.error);};});}
+  root.TEAM_APP_FILE_STORE={put,get,remove,removeTeam};
+})(typeof globalThis!=='undefined'?globalThis:this);

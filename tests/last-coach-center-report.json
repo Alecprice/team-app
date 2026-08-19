@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "workflow": [
+    "competition profile",
+    "local league overrides",
+    "home location",
+    "branding icon",
+    "coach staff",
+    "document upload"
+  ],
+  "profile": "Little League Major 9-12",
+  "viewport": "390x844"
+}

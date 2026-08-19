@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "teams": 2,
+  "baseball_players": 12,
+  "soccer_players": 1,
+  "isolated": true,
+  "viewport": "390x844"
+}
