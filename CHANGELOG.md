@@ -1,3 +1,20 @@
+# Team APP Changelog
+
+## V1.9.1 — Reliability & Production Contract Audit
+
+- Replaced hard-coded event/season defaults with local-date/current-year values.
+- Migrates V1.8 browser state into a V1.9 storage key without losing data.
+- Standardized the Vercel client on the single checked-in `app_api` Neon RPC.
+- Closed private-document acknowledgment and nonexistent-event availability gaps.
+- Restricted invitation/join role escalation at the database boundary.
+- Added required-field/signature validation for Data API form submissions.
+- Added size/count validation for encrypted messages, key envelopes and form schemas.
+- Corrected root `npm run dev` / `npm start` to preview the static Vercel architecture.
+- Restricted restored team branding to bounded raster image data URLs.
+- Added Escape-key handling to app/cloud dialogs.
+- Removed generated browser-test reports from source-control churn.
+- Updated active service/version labels to V1.9.
+
 # Changelog
 
 ## V1.8 — Secure Team Service

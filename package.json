@@ -7,19 +7,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "node --watch server/src/index.js",
-    "start": "node server/src/index.js",
+    "dev": "npm run build && node scripts/serve-static.js",
+    "start": "node scripts/serve-static.js",
     "build": "node scripts/build-vercel.js",
     "build:client": "node server/scripts/build-client.js",
-    "auth:migrate": "npx auth@latest migrate --config server/src/auth.js --yes",
-    "db:bootstrap": "node server/scripts/bootstrap-db.js",
     "test": "bash tests/run-all.sh && node --test server/tests/*.test.js",
     "test:service": "node --test server/tests/*.test.js",
-    "predev": "npm run build:client",
-    "push:keys": "node server/scripts/generate-vapid.js",
-    "db:service": "node server/scripts/apply-service-schema.js",
-    "db:status": "node server/scripts/db-status.js",
-    "db:seed": "node server/scripts/seed-reference-data.js",
     "build:vercel": "node scripts/build-vercel.js"
   },
   "dependencies": {

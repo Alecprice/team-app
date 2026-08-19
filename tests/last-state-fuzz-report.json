@@ -1,5 +1,0 @@
-{
-  "status": "PASS",
-  "cases": 7,
-  "coverage": "malformed teams, rosters, periods, unit assignments, layout keys/defaults, events, practices and game sessions"
-}

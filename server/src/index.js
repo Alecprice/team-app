@@ -35,7 +35,7 @@ app.use('/api',protectBrowserMutation);
 // Lightweight per-instance abuse guard for custom API routes. Auth has its own limiter.
 const hits=new Map();app.use('/api',(req,res,next)=>{if(req.path.startsWith('/auth/'))return next();const now=Date.now(),key=`${req.ip}:${Math.floor(now/60000)}`,count=(hits.get(key)||0)+1;hits.set(key,count);if(hits.size>5000)for(const [k] of hits)if(!k.endsWith(String(Math.floor(now/60000))))hits.delete(k);if(count>300)return res.status(429).json({error:'rate_limit'});next();});
 
-app.get('/api/health',async(req,res)=>{try{await query('select 1');res.json({ok:true,service:'team-app',version:'1.8.0'});}catch(err){res.status(503).json({ok:false,error:'database_unavailable'});}});
+app.get('/api/health',async(req,res)=>{try{await query('select 1');res.json({ok:true,service:'team-app',version:'1.9.0'});}catch(err){res.status(503).json({ok:false,error:'database_unavailable'});}});
 app.use('/api',teamsRouter,invitesRouter,documentsRouter,formsRouter,messagingRouter,pushRouter,availabilityRouter,cronRouter);
 
 app.use(express.static(root,{etag:true,lastModified:true,setHeaders(res,file){if(/\.(?:js|css|png|svg|webmanifest)$/.test(file))res.setHeader('Cache-Control','public,max-age=300,must-revalidate');}}));
@@ -43,4 +43,4 @@ app.get('*',(req,res,next)=>{if(req.path.startsWith('/api/'))return next();res.s
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 app.use((err,req,res,next)=>{console.error('[server]',err);if(res.headersSent)return next(err);const status=err?.name==='ZodError'?400:500;res.status(status).json({error:status===400?'invalid_request':'internal_error',details:config.nodeEnv==='production'?undefined:err?.message});});
 
-app.listen(config.port,()=>console.log(`Team APP V1.8 listening on ${config.authUrl}`));
+app.listen(config.port,()=>console.log(`Team APP V1.9 listening on ${config.authUrl}`));

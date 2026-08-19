@@ -32,4 +32,17 @@ assert.ok(html.indexOf('./cloud-client.js')<html.indexOf('./app.js'),'cloud clie
 assert.ok(app.includes('function renderCoachCenter()'),'coach center missing');
 assert.ok(app.includes('function renderTeamSetupModal()'),'team setup workflow missing');
 assert.ok(app.includes('function saveDocumentFromForm'),'team document workflow missing');
+
+assert.ok(!app.includes("date:'2026-08-21'"),'new events must not use a hard-coded historical date');
+const serverIndex=fs.readFileSync(path.join(root,'server/src/index.js'),'utf8');
+assert.ok(serverIndex.includes("version:'1.9.0'"),'health endpoint version must match V1.9');
+assert.ok(serverIndex.includes('Team APP V1.9 listening'),'server banner must match V1.9');
+
+const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+assert.match(pkg.scripts.dev,/serve-static/,'default dev command must preview the Vercel/static architecture');
+assert.match(pkg.scripts.start,/serve-static/,'default start command must serve built static output');
+assert.ok(!/server\/src\/index/.test(pkg.scripts.dev||''),'default dev command must not launch legacy Express server');
+assert.ok(app.includes("const STORAGE_KEY = 'team-app-service-v1.9-state'"),'active local storage key must match V1.9');
+assert.ok(app.includes("'team-app-service-v1.8-state'"),'V1.8 local state must remain migratable');
+assert.ok(app.includes('function localDateValue('),'event date defaults must use local calendar date');
 console.log('PASS static architecture contract');

@@ -1,4 +1,4 @@
-const UA='TeamAPP/1.8 team-operations weather monitor';
+const UA='TeamAPP/1.9 team-operations weather monitor';
 async function nwsJson(url){const r=await fetch(url,{headers:{'User-Agent':UA,Accept:'application/geo+json, application/json'}});if(!r.ok)throw new Error(`NWS ${r.status}`);return r.json();}
 export async function forecastFor(lat,lon,startIso,endIso){
   const point=await nwsJson(`https://api.weather.gov/points/${lat},${lon}`);const hourlyUrl=point?.properties?.forecastHourly;if(!hourlyUrl)throw new Error('No NWS hourly forecast URL');

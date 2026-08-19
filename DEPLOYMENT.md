@@ -1,4 +1,4 @@
-# Team APP V1.8 Deployment
+# Team APP V1.9 Deployment
 
 ## Production components
 
@@ -38,7 +38,7 @@ npm run db:seed
 
 `db:seed` idempotently loads the six sport adapter metadata and all 183 competition profiles.
 
-The V1.8 service uses an optimistic-revision team snapshot during the migration from the prototype. More relational sport/event tables remain in `schema.sql` for the next normalization stage.
+The V1.9 service uses an optimistic-revision team snapshot during the migration from the prototype. More relational sport/event tables remain in `schema.sql` for the next normalization stage.
 
 ## 3. Authentication
 
@@ -97,7 +97,7 @@ Hourly is appropriate for the current monitoring design. It checks upcoming outd
 GET /api/health
 ```
 
-Expected response includes `ok: true`, service name, and version `1.8.0`.
+Expected response includes `ok: true`, service name, and version `1.9.0`.
 
 ## 8. Docker
 

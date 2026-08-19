@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const STORAGE_KEY = 'team-app-service-v1.8-state';
-  const LEGACY_STORAGE_KEYS = ['team-app-coach-v1.7-state','team-app-multisport-v1-state','team-app-baseball-v1-state'];
+  const STORAGE_KEY = 'team-app-service-v1.9-state';
+  const LEGACY_STORAGE_KEYS = ['team-app-service-v1.8-state','team-app-coach-v1.7-state','team-app-multisport-v1-state','team-app-baseball-v1-state'];
   const SPORTS = window.TEAM_APP_SPORTS || {};
   const CORE = window.TEAM_APP_CORE || {};
   const COMPETITION = window.TEAM_APP_COMPETITION_PROFILES || {registry:{}};
@@ -61,7 +61,7 @@
   function competitionLeague(record=team()){const cfg=competitionSport(sportKey(record));return cfg.leagueMap?.[record.leagueKey]||cfg.leagues?.[0]||null;}
   function competitionProfile(record=team()){const cfg=competitionSport(sportKey(record));return cfg.profileMap?.[record.competitionProfileId]||null;}
   function normalizeLocation(raw){const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};const lat=x.lat==null||x.lat===''?null:Number(x.lat),lon=x.lon==null||x.lon===''?null:Number(x.lon);const fallbackTz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';}catch{return 'UTC';}})();return {name:String(x.name||''),address:String(x.address||''),city:String(x.city||''),state:String(x.state||''),zip:String(x.zip||''),lat:Number.isFinite(lat)&&lat>=-90&&lat<=90?lat:null,lon:Number.isFinite(lon)&&lon>=-180&&lon<=180?lon:null,timezone:String(x.timezone||fallbackTz)};}
-  function normalizeBranding(raw){const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};return {primaryColor:/^#[0-9a-f]{6}$/i.test(String(x.primaryColor||''))?String(x.primaryColor):'#0f4c3a',secondaryColor:/^#[0-9a-f]{6}$/i.test(String(x.secondaryColor||''))?String(x.secondaryColor):'#f2c94c',logoDataUrl:String(x.logoDataUrl||'').startsWith('data:image/')?String(x.logoDataUrl):''};}
+  function normalizeBranding(raw){const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};const logo=String(x.logoDataUrl||'');const safeLogo=/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(logo)&&logo.length<=2_000_000?logo:'';return {primaryColor:/^#[0-9a-f]{6}$/i.test(String(x.primaryColor||''))?String(x.primaryColor):'#0f4c3a',secondaryColor:/^#[0-9a-f]{6}$/i.test(String(x.secondaryColor||''))?String(x.secondaryColor):'#f2c94c',logoDataUrl:safeLogo};}
   function normalizeRuleDetails(raw){const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};return {format:String(x.format||''),duration:String(x.duration||''),participation:String(x.participation||''),scoring:String(x.scoring||''),safety:String(x.safety||'')};}
   function normalizeStaff(raw){return (Array.isArray(raw)?raw:[]).filter(x=>x&&typeof x==='object'&&!Array.isArray(x)).map((x,i)=>({id:String(x.id||`staff-${i+1}`),name:String(x.name||'').trim(),role:String(x.role||'Assistant Coach').trim(),email:String(x.email||'').trim(),phone:String(x.phone||'').trim()})).filter(x=>x.name);}
   function teamSetupScore(record=team()){const checks=[record.name,record.season,record.ageGroup||record.division,record.leagueName||record.leagueKey,record.homeLocation?.name||record.homeLocation?.city,record.branding?.logoDataUrl,(record.staff||[]).length];return Math.round(checks.filter(Boolean).length/checks.length*100);}
@@ -92,7 +92,7 @@
     return {
       players,periodCount,activeUnitKey,unitAssignments,unitLayoutKeys,sequenceOrder:players.map(p=>p.id),lineupPresets:[],playerDevelopment:{},
       practices:(sp.practiceTemplate||[]).map((x,i)=>({id:`pr${i+1}`,title:x[0],minutes:Number(x[1]),category:x[2]})),
-      events:demo&&key==='baseball'?[{id:'e1',type:'Practice',title:'First Practice',date:'2026-08-21',start:'18:00',end:'19:30',venue:'Main Baseball Field',outdoor:true,lat:null,lon:null,notes:'Arrive 15 minutes early.'}]:[],
+      events:demo&&key==='baseball'?[{id:'e1',type:'Practice',title:'First Practice',date:localDateValue(),start:'18:00',end:'19:30',venue:'Main Baseball Field',outdoor:true,lat:null,lon:null,notes:'Arrive 15 minutes early.'}]:[],
       weatherCache:{},gameSessions:{},activeGameEventId:null,documents:[]
     };
   }
@@ -147,7 +147,7 @@
   const initial = baseAssignments(demoPlayers);
 
   function defaultState(){
-    const teamRecord={id:'team1',name:'My Baseball Team',shortName:'',sport:'Baseball',sportKey:'baseball',season:'Fall 2026',ageGroup:'',division:'',leagueKey:'recreation',leagueName:'Local Recreation League',governingBody:'Local league',competitionProfileId:'',ruleSet:'Custom / Recreation',ruleSourceUrl:'',ruleSourceNote:'',localRulesNote:'',localRuleDetails:normalizeRuleDetails({}),homeLocation:normalizeLocation({}),branding:normalizeBranding({}),staff:[],defaultLayouts:{default:'standard'},color:'#0f4c3a'};
+    const teamRecord={id:'team1',name:'My Baseball Team',shortName:'',sport:'Baseball',sportKey:'baseball',season:`${new Date().getFullYear()} Season`,ageGroup:'',division:'',leagueKey:'recreation',leagueName:'Local Recreation League',governingBody:'Local league',competitionProfileId:'',ruleSet:'Custom / Recreation',ruleSourceUrl:'',ruleSourceNote:'',localRulesNote:'',localRuleDetails:normalizeRuleDetails({}),homeLocation:normalizeLocation({}),branding:normalizeBranding({}),staff:[],defaultLayouts:{default:'standard'},color:'#0f4c3a'};
     return {version:8,currentTeamId:'team1',teams:[teamRecord],teamContexts:{team1:buildTeamContext('baseball',{demo:true})},settings:{notifications:true,weatherAlerts:true,showDemoNotice:true}};
   }
 
@@ -696,8 +696,10 @@
     return modalShell('Add practice activity',`<form id="practiceForm"><div class="form-grid"><div class="field"><label>Activity</label><input name="title" required placeholder="Skill or team activity"></div><div class="field"><label>Minutes</label><input name="minutes" type="number" min="1" max="180" required value="10"></div><div class="field"><label>Category</label><select name="category">${categories.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div></div><div class="modal-actions"><button type="button" class="secondary-btn" id="cancelModal">Cancel</button><button class="primary-btn">Add activity</button></div></form>`);
   }
 
+  function localDateValue(date=new Date()){const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');return `${y}-${m}-${d}`;}
+  function dateOffsetValue(days=0){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+Number(days||0));return localDateValue(d);}
   function renderEventModal(id){
-    const home=team().homeLocation||{};const e=id?state.events.find(x=>x.id===id):{type:'Practice',title:'',date:'2026-08-21',start:'18:00',end:'19:30',venue:home.name||'',outdoor:true,lat:home.lat??null,lon:home.lon??null,notes:''};
+    const home=team().homeLocation||{};const e=id?state.events.find(x=>x.id===id):{type:'Practice',title:'',date:localDateValue(),start:'18:00',end:'19:30',venue:home.name||'',outdoor:true,lat:home.lat??null,lon:home.lon??null,notes:''};
     return modalShell(id?'Edit event':'Add event',`<form id="eventForm"><div class="form-grid two">
       <div class="field"><label>Type</label><select name="type"><option ${e.type==='Practice'?'selected':''}>Practice</option><option ${e.type==='Game'?'selected':''}>Game</option><option ${e.type==='Meeting'?'selected':''}>Meeting</option><option ${e.type==='Tournament'?'selected':''}>Tournament</option></select></div>
       <div class="field"><label>Title</label><input name="title" required value="${esc(e.title)}" placeholder="Practice"></div>
@@ -737,7 +739,7 @@
   }
   function renderCreateTeamModal(){
     const sports=Object.values(SPORTS);
-    return modalShell('Create a team',`<form id="createTeamForm"><div class="form-grid"><div class="field"><label>Sport</label><select name="sportKey" required>${sports.map(sp=>`<option value="${esc(sp.key)}">${esc(sp.emoji)} ${esc(sp.name)}</option>`).join('')}</select></div><div class="field"><label>Team name</label><input name="name" required placeholder="Red Lightning"></div><div class="field"><label>Season</label><input name="season" required value="Fall 2026" placeholder="Fall 2026"></div></div><div class="notice" style="margin-top:12px"><strong>Next:</strong> after creating the team, Team APP opens the full Coach Setup screen for age/division, league, rule source, location, colors, icon and staff.</div><div class="modal-actions"><button type="button" class="secondary-btn" id="cancelModal">Cancel</button><button class="primary-btn">Create & continue setup</button></div></form>`);
+    return modalShell('Create a team',`<form id="createTeamForm"><div class="form-grid"><div class="field"><label>Sport</label><select name="sportKey" required>${sports.map(sp=>`<option value="${esc(sp.key)}">${esc(sp.emoji)} ${esc(sp.name)}</option>`).join('')}</select></div><div class="field"><label>Team name</label><input name="name" required placeholder="Red Lightning"></div><div class="field"><label>Season</label><input name="season" required value="${new Date().getFullYear()} Season" placeholder="${new Date().getFullYear()} Season"></div></div><div class="notice" style="margin-top:12px"><strong>Next:</strong> after creating the team, Team APP opens the full Coach Setup screen for age/division, league, rule source, location, colors, icon and staff.</div><div class="modal-actions"><button type="button" class="secondary-btn" id="cancelModal">Cancel</button><button class="primary-btn">Create & continue setup</button></div></form>`);
   }
   function renderTeamSetupModal(){
     const t=team(),cfg=competitionSport(),profile=competitionProfile(t),leagues=cfg.leagues||[];
@@ -1168,6 +1170,7 @@
       registry(){return Object.fromEntries(Object.entries(SPORTS).map(([k,v])=>[k,{positions:v.unitMap?.[v.defaultUnitKey]?.layoutMap?.[v.unitMap?.[v.defaultUnitKey]?.defaultLayoutKey]?.slots?.length||v.positions.length,periods:v.defaultPeriods,layouts:v.units.reduce((n,u)=>n+(u.layouts?.length||0),0),pitchTracking:!!v.capabilities.pitchTracking,sequenceOrder:!!v.capabilities.sequenceOrder}]))}
     };
   }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal){e.preventDefault();closeModal();}});
   window.addEventListener('hashchange',()=>{currentView=(location.hash||'#home').slice(1);selectedPlayerId=null;render();});
   if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
   render();

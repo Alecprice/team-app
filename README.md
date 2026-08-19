@@ -1,10 +1,10 @@
-# Team APP — Secure Multi-Sport Service V1.8
+# Team APP — Secure Multi-Sport Service V1.9
 
 > Deployment status: NOT CURRENTLY DEPLOYED. This package is the clean Vercel/Neon re-scope baseline.
 
 Team APP is a mobile-first team-management, coaching, communication, scheduling, weather and learning PWA. Baseball remains the deepest coaching template, while the shared architecture supports Baseball, Softball, Soccer, Basketball, Football and Volleyball.
 
-V1.8 moves the project from a single-device coaching prototype into a deployable team service while preserving offline-first coaching tools.
+V1.9 moves the project from a single-device coaching prototype into a deployable team service while preserving offline-first coaching tools.
 
 ## Coach product
 
@@ -154,7 +154,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Neon status for this project
 
-A Neon project has been provisioned for Team APP, the V1.8 service/core tables have been initialized, and Neon managed Auth has also been provisioned as an optional managed identity path. This source build intentionally defaults to the **self-hosted Better Auth adapter** because it currently includes the passkey plugin. Do not run two identity systems as authoritative providers in one deployment.
+A Neon project has been provisioned for Team APP, the V1.9 service/core tables have been initialized, and Neon managed Auth has also been provisioned as an optional managed identity path. This source build intentionally defaults to the **self-hosted Better Auth adapter** because it currently includes the passkey plugin. Do not run two identity systems as authoritative providers in one deployment.
 
 ## Test gate
 
@@ -162,7 +162,7 @@ A Neon project has been provisioned for Team APP, the V1.8 service/core tables h
 npm test
 ```
 
-The current V1.8 regression gate covers:
+The current V1.9 regression gate covers:
 
 - 6 sport adapters
 - 183 competition profiles

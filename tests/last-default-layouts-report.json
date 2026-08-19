@@ -1,6 +1,0 @@
-{
-  "status": "PASS",
-  "soccer": "new periods use team 7v7 default without rewriting old periods",
-  "football": "offense/defense defaults independent",
-  "viewport": "390x844"
-}

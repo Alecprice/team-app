@@ -9,8 +9,45 @@ let runtime=null,session=null,me=null,hydrating=true,syncTimer=null,pollTimer=nu
 const revisions=new Map(),conflicts=new Map();
 const QUEUE_KEY='team-app-cloud-sync-queue-v1';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const RPC_SPECS={
+  app_me:['me',()=>({})],
+  app_team_create:['team.create',a=>a.p_payload||{}],
+  app_team_state:['team.state.get',a=>({teamId:a.p_team})],
+  app_team_update:['team.state.update',a=>({teamId:a.p_team,revision:a.p_revision,teamRecord:a.p_team_record||{},context:a.p_context||{}})],
+  app_team_members:['team.members',a=>({teamId:a.p_team})],
+  app_invitation_create:['invitation.create',a=>({teamId:a.p_team,email:a.p_email,role:a.p_role,athleteClientKey:a.p_athlete_client_key,expiresHours:a.p_expires_hours})],
+  app_invitation_list:['invitation.list',a=>({teamId:a.p_team})],
+  app_invitation_accept:['invitation.accept',a=>({token:a.p_token})],
+  app_join_create:['join.create',a=>({teamId:a.p_team,role:a.p_role,athleteClientKey:a.p_athlete_client_key,maxUses:a.p_max_uses,expiresHours:a.p_expires_hours})],
+  app_join_redeem:['join.redeem',a=>({code:a.p_code})],
+  app_document_list:['document.list',a=>({teamId:a.p_team})],
+  app_document_upload:['document.upload',a=>({teamId:a.p_team,name:a.p_name,contentType:a.p_content_type,category:a.p_category,visibility:a.p_visibility,description:a.p_description,contentBase64:a.p_content_base64})],
+  app_document_get:['document.get',a=>({documentId:a.p_document})],
+  app_document_ack:['document.ack',a=>({documentId:a.p_document})],
+  app_document_delete:['document.delete',a=>({teamId:a.p_team,documentId:a.p_document})],
+  app_availability_get:['availability.get',a=>({teamId:a.p_team,eventId:a.p_event_id})],
+  app_availability_set:['availability.set',a=>({teamId:a.p_team,eventId:a.p_event_id,athleteClientKey:a.p_athlete_client_key,status:a.p_status,note:a.p_note})],
+  app_crypto_put:['crypto.put',a=>({publicKeyJwk:a.p_public_key_jwk,algorithm:a.p_algorithm,version:a.p_version})],
+  app_conversation_create:['conversation.create',a=>({teamId:a.p_team,kind:a.p_kind,name:a.p_name,memberUserIds:a.p_member_user_ids,visibility:a.p_visibility})],
+  app_conversation_list:['conversation.list',a=>({teamId:a.p_team})],
+  app_conversation_members:['conversation.members',a=>({conversationId:a.p_conversation})],
+  app_conversation_envelopes_put:['conversation.envelopes.put',a=>({conversationId:a.p_conversation,keyVersion:a.p_key_version,envelopes:a.p_envelopes})],
+  app_conversation_envelope_get:['conversation.envelope.get',a=>({conversationId:a.p_conversation})],
+  app_message_send:['conversation.message.send',a=>({conversationId:a.p_conversation,ciphertext:a.p_ciphertext,nonce:a.p_nonce,cryptoVersion:a.p_crypto_version,clientMessageId:a.p_client_message_id})],
+  app_message_list:['conversation.message.list',a=>({conversationId:a.p_conversation,after:a.p_after})],
+  app_message_read:['conversation.read',a=>({conversationId:a.p_conversation})],
+  app_form_list:['form.list',a=>({teamId:a.p_team})],
+  app_form_create:['form.create',a=>({teamId:a.p_team,title:a.p_title,description:a.p_description,visibility:a.p_visibility,requiresSignature:a.p_requires_signature,fields:a.p_fields})],
+  app_form_assign:['form.assign',a=>({teamId:a.p_team,formId:a.p_form,userId:a.p_user,dueAt:a.p_due_at})],
+  app_form_assignments:['form.assignments',a=>({teamId:a.p_team,formId:a.p_form})],
+  app_form_submit:['form.submit',a=>({teamId:a.p_team,formId:a.p_form,answers:a.p_answers,signature:a.p_signature})],
+  app_form_submissions:['form.submissions',a=>({teamId:a.p_team,formId:a.p_form})],
+  app_prefs_get:['prefs.get',a=>({teamId:a.p_team})],
+  app_prefs_set:['prefs.set',a=>({teamId:a.p_team,messages:a.p_messages,schedule:a.p_schedule,weather:a.p_weather,documents:a.p_documents,forms:a.p_forms})]
+};
 async function rpc(name,args={}){
-  const {data,error}=await neon.rpc(name,args);
+  const spec=RPC_SPECS[name];if(!spec)throw new Error(`Unsupported RPC mapping: ${name}`);
+  const {data,error}=await neon.rpc('app_api',{p_action:spec[0],p_payload:spec[1](args)});
   if(error){const e=new Error(error.message||error.details||'Cloud request failed');e.status=/permission|not_a_|required|allowed/i.test(e.message)?403:400;e.data=error;throw e;}
   if(data&&typeof data==='object'&&!Array.isArray(data)&&data.error){const e=new Error(data.error);e.status=Number(data.status||400);e.data=data;throw e;}
   return data;
@@ -48,7 +85,7 @@ async function api(url,options={}){
   throw new Error(`Unsupported cloud route: ${method} ${path}`);
 }
 
-function overlay(html){closeOverlay();const el=document.createElement('div');el.className='cloud-overlay';el.id='cloudOverlay';el.innerHTML=`<div class="cloud-sheet">${html}</div>`;document.body.appendChild(el);el.addEventListener('click',e=>{if(e.target===el)closeOverlay();});return el;}
+function overlay(html){closeOverlay();const el=document.createElement('div');el.className='cloud-overlay';el.id='cloudOverlay';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Team APP account panel');el.innerHTML=`<div class="cloud-sheet">${html}</div>`;document.body.appendChild(el);el.addEventListener('click',e=>{if(e.target===el)closeOverlay();});return el;}
 function closeOverlay(){document.getElementById('cloudOverlay')?.remove();if(pollTimer){clearInterval(pollTimer);pollTimer=null;}activeConversation=null;}
 function buttonBusy(btn,busy,label='Working…'){if(!btn)return;btn.disabled=busy;if(busy){btn.dataset.oldText=btn.textContent;btn.textContent=label;}else if(btn.dataset.oldText){btn.textContent=btn.dataset.oldText;delete btn.dataset.oldText;}}
 function localQueue(){try{return JSON.parse(localStorage.getItem(QUEUE_KEY)||'{}')||{};}catch{return {};}}
@@ -143,5 +180,6 @@ function createFormUI(){const el=overlay(`<div class="eyebrow">New form</div><h2
 function openForm(form){const fields=form.schema?.fields||[];const el=overlay(`<div class="card-title-row"><div><div class="eyebrow">Form</div><h2>${esc(form.title)}</h2><div class="card-sub">${esc(form.description||'')}</div></div><button class="secondary-btn small-btn" data-cloud-close>Close</button></div><form id="submitCloudForm">${fields.map(f=>renderFormField(f)).join('')}${form.requires_signature?`<div class="separator"></div><div class="field"><label>Signature name</label><input name="signatureName" required></div><label class="cloud-adult"><input type="checkbox" name="signatureConsent" required> I certify that this submission is accurate and I intend this typed name as my electronic signature.</label>`:''}<button class="primary-btn cloud-wide">Submit form</button></form>`);el.querySelectorAll('[data-cloud-close]').forEach(b=>b.onclick=closeOverlay);el.querySelector('#submitCloudForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),answers={};for(const f of fields)answers[f.id]=f.type==='checkbox'?fd.get(f.id)==='on':String(fd.get(f.id)||'');const signature=form.requires_signature?{type:'typed',name:String(fd.get('signatureName')),consentText:'I certify that this submission is accurate and I intend this typed name as my electronic signature.'}:undefined;await api(`/api/teams/${activeRemoteId()}/forms/${form.id}/submit`,{method:'POST',body:JSON.stringify({answers,signature})});alert('Form submitted.');closeOverlay();};}
 function renderFormField(f){if(f.type==='textarea')return `<div class="field"><label>${esc(f.label)}</label><textarea name="${esc(f.id)}" ${f.required?'required':''}></textarea></div>`;if(f.type==='yes_no')return `<div class="field"><label>${esc(f.label)}</label><select name="${esc(f.id)}" ${f.required?'required':''}><option value="">Choose…</option><option>Yes</option><option>No</option></select></div>`;if(f.type==='checkbox')return `<label class="cloud-adult"><input type="checkbox" name="${esc(f.id)}"> ${esc(f.label)}</label>`;return `<div class="field"><label>${esc(f.label)}</label><input name="${esc(f.id)}" type="${f.type==='number'?'number':f.type==='date'?'date':'text'}" ${f.required?'required':''}></div>`;}
 
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('cloudOverlay')){e.preventDefault();closeOverlay();}});
 window.TeamAppCloud={start,scheduleSync,renderCoachPanel,bindUI,openAccount,openAvailability,uploadDocument,downloadDocument,deleteDocument,closeOverlay,roleForActiveTeam(){const id=activeRemoteId();return id?roleFor(id):null;},canCoach(){const id=activeRemoteId();return !session||!id||coachRoles.has(roleFor(id));},get session(){return session;},get me(){return me;},cloudTeamToLocal};
 window.dispatchEvent(new CustomEvent('teamapp:cloud-module-ready'));

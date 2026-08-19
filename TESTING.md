@@ -1,4 +1,4 @@
-# Team APP V1.8 Testing
+# Team APP V1.9 Testing
 
 ## One-command regression gate
 
@@ -66,3 +66,8 @@ The artifact-generation environment could not reach the npm registry, so the Bet
 - Web Push subscription and category preferences
 - weather cron notification
 - guardian event availability
+
+
+## V1.9.1 audit additions
+
+The regression gate also protects the single-RPC Neon Data API contract, V1.8→V1.9 local-storage migration, dynamic event dates, safe invitation/join roles, private-document acknowledgments, event-scoped availability writes, form validation, message/envelope size bounds, and static Vercel dev/start commands.
