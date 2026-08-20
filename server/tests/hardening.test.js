@@ -112,7 +112,7 @@ test('hardening contracts cover sync quotas, role preservation, scoped messaging
   assert.match(sql,/use_count<max_uses/);
   assert.match(sql,/uq_form_assignments_target/);
   assert.match(sql,/app_validate_document/);
-  assert.match(sql,/where n\.nspname='public' and p\.proname like 'app\\_%'/);
+  assert.match(sql,/where n\.nspname='public' and left\(p\.proname,4\)='app_'/);
   assert.match(sql,/revoke all on function %s from public, authenticated, anonymous/);
   assert.match(sql,/grant execute on function app_api\(text,jsonb\) to authenticated/);
   const docs=read('server/src/routes-documents.js'),storage=read('server/src/storage.js'),index=read('server/src/index.js'),headers=read('_headers'),wrangler=read('wrangler.jsonc');

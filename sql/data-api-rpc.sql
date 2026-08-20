@@ -499,7 +499,7 @@ begin
     select p.oid::regprocedure::text as signature
     from pg_proc p
     join pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public' and p.proname like 'app\_%' escape '\\'
+    where n.nspname='public' and left(p.proname,4)='app_'
   loop
     execute format('revoke all on function %s from public, authenticated, anonymous',r.signature);
   end loop;
