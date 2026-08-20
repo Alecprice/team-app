@@ -8,7 +8,7 @@ def html():
 
 def main():
   with sync_playwright() as p:
-    browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    browser=p.chromium.launch(headless=True,args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html(),wait_until='load')
     # Soccer defaults affect new periods only.
     page.evaluate("window.__TEAM_APP_TEST__.previewSport('soccer')");page.locator('#teamSwitcher').click();page.locator('#manageCurrentTeamBtn').click();assert page.locator('select[name="layout_default"]').count()==1

@@ -7,7 +7,7 @@ def overflow(page,label):
  v=page.evaluate("({w:document.documentElement.scrollWidth,c:document.documentElement.clientWidth})");assert v['w']<=v['c']+1,f'{label} overflow {v}'
 def main():
  with sync_playwright() as p:
-  b=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=b.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.set_content(html(),wait_until='load')
+  b=p.chromium.launch(headless=True,args=['--no-sandbox']);page=b.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.set_content(html(),wait_until='load')
   page.evaluate("window.__TEAM_APP_TEST__.previewSport('baseball')");got=page.evaluate("window.__TEAM_APP_TEST__.stressData({players:500,periods:40,events:250,activities:200})");assert got=={'players':500,'periods':40,'events':250,'activities':200}
   timings={}
   for key,selector,count in [('roster','.roster-list .player-row',500),('practice','.timeline-item',200),('schedule','.event-card',250)]:

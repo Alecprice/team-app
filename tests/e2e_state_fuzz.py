@@ -46,7 +46,7 @@ def validate(state, registry):
 
 def main():
     with sync_playwright() as p:
-        b=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+        b=p.chromium.launch(headless=True,args=['--no-sandbox'])
         page=b.new_page(); errors=[]; page.on('pageerror',lambda e:errors.append(str(e))); page.set_content(html())
         registry=page.evaluate("Object.fromEntries(Object.entries(window.TEAM_APP_SPORTS).map(([k,v])=>[k,{units:v.units.map(u=>u.key),layouts:Object.fromEntries(v.units.map(u=>[u.key,u.layouts.map(l=>l.key)]))}]))")
         for i,case in enumerate(CASES):

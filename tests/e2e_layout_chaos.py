@@ -21,7 +21,7 @@ def assert_assignment_integrity(page,sport,unit,period):
 def main():
   report={'status':'PASS','layouts_tested':0,'sports':{},'gameday_undo':False,'viewport':'320x568'}
   with sync_playwright() as p:
-    browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+    browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':320,'height':568});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(html(),wait_until='load')
     for sport in SPORTS:

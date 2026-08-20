@@ -85,7 +85,7 @@ def run_viewport(browser, viewport, label):
 def main():
     results=[]
     with sync_playwright() as p:
-        browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+        browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
         results.append(run_viewport(browser,{'width':320,'height':568},'small-mobile-320x568'))
         results.append(run_viewport(browser,{'width':390,'height':844},'mobile-390x844'))
         results.append(run_viewport(browser,{'width':844,'height':390},'mobile-landscape-844x390'))

@@ -9,3 +9,4 @@ coverage/
 .DS_Store
 
 tests/last-*-report.json
+.venv/

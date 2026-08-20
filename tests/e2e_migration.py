@@ -16,7 +16,7 @@ def main():
       'activeGameEventId':'e1','settings':{}
     }
     with sync_playwright() as p:
-      browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+      browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
       page=browser.new_page();page.set_content(html(),wait_until='load')
       migrated=page.evaluate('(x)=>window.__TEAM_APP_TEST__.migrateState(x)',legacy)
       assert migrated['version']==8

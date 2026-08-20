@@ -16,7 +16,7 @@
     "build:cloudflare": "node scripts/build-cloudflare.js"
   },
   "dependencies": {
-    "@neondatabase/neon-js": "0.6.2-beta"
+    "@neondatabase/neon-js": "0.7.0-beta"
   },
   "devDependencies": {
     "esbuild": "0.28.1",

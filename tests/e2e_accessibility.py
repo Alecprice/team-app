@@ -19,7 +19,7 @@ def audit(page,label):
 
 def main():
     with sync_playwright() as p:
-      b=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+      b=p.chromium.launch(headless=True,args=['--no-sandbox'])
       page=b.new_page(viewport={'width':320,'height':568})
       errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
       page.set_content(html(),wait_until='load')

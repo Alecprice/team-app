@@ -96,7 +96,7 @@ test('offline cloud queue survives module reload, bounds growth, and preserves o
 
 test('production build dependencies are exact and currently published',()=>{
   const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-  assert.equal(pkg.dependencies['@neondatabase/neon-js'],'0.6.2-beta');
+  assert.equal(pkg.dependencies['@neondatabase/neon-js'],'0.7.0-beta');
   assert.equal(pkg.devDependencies.esbuild,'0.28.1');
   for(const spec of [...Object.values(pkg.dependencies||{}),...Object.values(pkg.devDependencies||{})]) assert.doesNotMatch(spec,/^[~^*]|\bx\b/i);
 });
