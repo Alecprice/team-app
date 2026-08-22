@@ -34,7 +34,8 @@ assert(lock.packages?.['']?.version === pkg.version, 'lockfile root version matc
 assert(sameMap(lock.packages?.['']?.dependencies, pkg.dependencies), 'lockfile runtime dependencies match package.json');
 assert(sameMap(lock.packages?.['']?.devDependencies, pkg.devDependencies), 'lockfile dev dependencies match package.json');
 
-assert(sw.includes(`const CACHE='team-app-live-v${pkg.version}'`), `service-worker cache namespace matches V${pkg.version}`);
+assert(sw.includes(`const CACHE='team-app-live-v${pkg.version}`), `service-worker cache namespace is in the V${pkg.version} family`);
+assert(!sw.includes('c.put(event.request,copy));}return res;}).catch(async()=>{const cached=await caches.match(event.request)'), 'service-worker no longer blindly caches navigation URLs containing query secrets');
 const assetsMatch = sw.match(/const ASSETS=\[(.*?)\];/s);
 if (!assetsMatch) {
   fail('service-worker precache asset list could not be parsed');
@@ -54,6 +55,8 @@ for (const required of [
   './core/cloud-queue.js',
   './core/connectivity-status.js',
   './core/connectivity-status.css',
+  './core/hardening-runtime.js',
+  './core/hardening-runtime.css',
   './cloud-client.js',
   './app.js'
 ]) {
@@ -61,6 +64,8 @@ for (const required of [
   assert(distHtml.includes(required), `dist shell references ${required}`);
 }
 assert(sourceHtml.indexOf('./core/cloud-queue.js') < sourceHtml.indexOf('./cloud-client.js'), 'offline queue loads before cloud client');
+assert(sourceHtml.indexOf('./cloud-client.js') < sourceHtml.indexOf('./core/hardening-runtime.js'), 'hardening runtime loads after cloud client');
+assert(sourceHtml.indexOf('./core/hardening-runtime.js') < sourceHtml.indexOf('./app.js'), 'hardening runtime loads before main app');
 assert(sourceHtml.indexOf('./app.js') < sourceHtml.indexOf('./core/connectivity-status.js'), 'connectivity enhancer loads after main app');
 
 assert(manifest.id === './', 'manifest has stable app id');
@@ -101,6 +106,8 @@ for (const file of [
   'core/cloud-queue.js',
   'core/connectivity-status.js',
   'core/connectivity-status.css',
+  'core/hardening-runtime.js',
+  'core/hardening-runtime.css',
   'sw.js',
   'manifest.webmanifest',
   '_headers'
