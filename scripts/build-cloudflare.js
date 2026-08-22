@@ -13,7 +13,24 @@ const buildEnv=process.env.TEAM_APP_ENV||process.env.CF_PAGES_BRANCH||'local';
 const commitSha=process.env.CF_PAGES_COMMIT_SHA||process.env.GITHUB_SHA||'local';
 const OLD_SEND="el.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();if(!current)return;const input=e.currentTarget.message,text=input.value.trim();if(!text)return;input.value='';const encrypted=await window.TEAM_APP_E2EE.encryptMessage(conv.id,current.keyVersion,current.key,text);await api(`/api/conversations/${conv.id}/messages`,{method:'POST',body:JSON.stringify({...encrypted,clientMessageId:crypto.randomUUID()})});await load();};";
 const NEW_SEND="el.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();if(!current)return;const form=e.currentTarget,input=form.message,btn=form.querySelector('button[type=submit],button:not([type])'),text=input.value.trim();if(!text)return;input.disabled=true;if(btn)buttonBusy(btn,true,'Sending…');try{const encrypted=await window.TEAM_APP_E2EE.encryptMessage(conv.id,current.keyVersion,current.key,text);await api(`/api/conversations/${conv.id}/messages`,{method:'POST',body:JSON.stringify({...encrypted,clientMessageId:crypto.randomUUID()})});input.value='';await load();}catch(err){input.value=text;runtime?.toast?.('Message was not sent. Your draft is still here.');throw err;}finally{input.disabled=false;if(btn)buttonBusy(btn,false);input.focus();}};";
-const sourcePlugin={name:'team-app-cloud-source-hardening',setup(ctx){ctx.onLoad({filter:/client\/(?:cloud-entry|cloud-admin-hardening)\.js$/},async args=>{let contents=await fs.readFile(args.path,'utf8');contents=contents.replaceAll(DEFAULT_AUTH,authUrl).replaceAll(DEFAULT_DATA,dataUrl);if(args.path.endsWith('cloud-entry.js')){if(!contents.includes(OLD_SEND))throw new Error('Cloud message-send source contract changed; update the hardening transform.');contents=contents.replace(OLD_SEND,NEW_SEND);}return {contents,loader:'js'};});}};
+const SYNC_DECL='async function syncActive(force=false){';
+const QUEUE_DECL='async function queuePayload(p){';
+const POLL_OLD="await load();pollTimer=setInterval(()=>load().catch(console.warn),3000);";
+const POLL_NEW="await load();const poll=()=>{if(document.visibilityState==='visible')load().catch(console.warn);};pollTimer=setInterval(poll,8000);";
+const DIRECT_OLD='const directTargets=members.filter(m=>m.id!==me?.user?.id);';
+const DIRECT_NEW='const directTargets=members.filter(m=>m.id!==me?.user?.id&&(coach||coachRoles.has(m.role)));';
+const sourcePlugin={name:'team-app-cloud-source-hardening',setup(ctx){ctx.onLoad({filter:/client\/(?:cloud-entry|cloud-admin-hardening)\.js$/},async args=>{
+  let contents=await fs.readFile(args.path,'utf8');contents=contents.replaceAll(DEFAULT_AUTH,authUrl).replaceAll(DEFAULT_DATA,dataUrl);
+  if(args.path.endsWith('cloud-entry.js')){
+    for(const [needle,label] of [[OLD_SEND,'message send'],[SYNC_DECL,'sync declaration'],[QUEUE_DECL,'queue declaration'],[POLL_OLD,'message polling'],[DIRECT_OLD,'direct-message targets']])if(!contents.includes(needle))throw new Error(`Cloud ${label} source contract changed; update the hardening transform.`);
+    contents=contents.replace(OLD_SEND,NEW_SEND);
+    contents=contents.replace(SYNC_DECL,'async function syncActiveCore(force=false){');
+    contents=contents.replace(QUEUE_DECL,"let syncTail=Promise.resolve();\nfunction syncActive(force=false){const run=syncTail.catch(()=>{}).then(()=>syncActiveCore(force));syncTail=run;return run;}\nasync function queuePayload(p){");
+    contents=contents.replace(POLL_OLD,POLL_NEW);
+    contents=contents.replace(DIRECT_OLD,DIRECT_NEW);
+  }
+  return {contents,loader:'js'};
+});}};
 await fs.rm(dist,{recursive:true,force:true});await fs.mkdir(dist,{recursive:true});
 await build({entryPoints:[path.join(root,'client/cloud-entry-hardened.js')],bundle:true,minify:true,sourcemap:false,format:'iife',platform:'browser',target:['es2022'],outfile:path.join(dist,'cloud-client.js'),plugins:[sourcePlugin],define:{'process.env.NODE_ENV':'"production"'}});
 const files=['index.html','styles.css','sports.js','competition-profiles.js','app.js','sw.js','manifest.webmanifest','_headers'];
