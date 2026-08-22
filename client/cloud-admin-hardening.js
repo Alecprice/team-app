@@ -1,8 +1,8 @@
-import {createClient} from '@neondatabase/neon-js';
+import {createClient,SupabaseAuthAdapter} from '@neondatabase/neon-js';
 
 const NEON_AUTH_URL='https://ep-noisy-violet-awtos8ns.neonauth.c-12.us-east-1.aws.neon.tech/neondb/auth';
 const NEON_DATA_API_URL='https://ep-noisy-violet-awtos8ns.apirest.c-12.us-east-1.aws.neon.tech/neondb/rest/v1';
-const neon=createClient({auth:{url:NEON_AUTH_URL},dataApi:{url:NEON_DATA_API_URL}});
+const neon=createClient({auth:{url:NEON_AUTH_URL,adapter:SupabaseAuthAdapter()},dataApi:{url:NEON_DATA_API_URL}});
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function rpc(action,payload={}){const {data,error}=await neon.rpc('app_api',{p_action:action,p_payload:payload});if(error)throw new Error(error.message||error.details||'Cloud access request failed');if(data&&typeof data==='object'&&!Array.isArray(data)&&data.error)throw new Error(data.error);return data;}
@@ -15,7 +15,7 @@ async function updateRole(userId,nextRole){const id=teamId();if(!id)throw new Er
 async function removeMember(userId){const id=teamId();if(!id)throw new Error('No cloud team selected.');return rpc('member.remove',{teamId:id,userId});}
 async function transferOwner(userId){const id=teamId();if(!id)throw new Error('No cloud team selected.');return rpc('team.owner.transfer',{teamId:id,userId});}
 async function revokeInvitation(invitationId){const id=teamId();if(!id)throw new Error('No cloud team selected.');return rpc('invitation.revoke',{teamId:id,invitationId});}
-async function requestPasswordReset(email){if(typeof neon.auth?.resetPasswordForEmail!=='function')throw new Error('Password recovery is unavailable in this Auth SDK build.');const result=await neon.auth.resetPasswordForEmail(String(email).trim(),{redirectTo:`${location.origin}${location.pathname}`});if(result?.error)throw new Error(result.error.message||'Could not send password recovery email.');return result;}
+async function requestPasswordReset(email){const result=await neon.auth.resetPasswordForEmail(String(email).trim(),{redirectTo:`${location.origin}${location.pathname}`});if(result?.error)throw new Error(result.error.message||'Could not send password recovery email.');return result;}
 
 function busy(btn,on,label='Working…'){if(!btn)return;if(on){btn.dataset.oldText=btn.textContent;btn.textContent=label;btn.disabled=true;}else{btn.disabled=false;if(btn.dataset.oldText){btn.textContent=btn.dataset.oldText;delete btn.dataset.oldText;}}}
 function accessSheet(){const sheet=document.querySelector('#cloudOverlay .cloud-sheet');if(!sheet)return null;const title=sheet.querySelector('h2')?.textContent||'';return /Invite coaches\s*&\s*guardians/i.test(title)?sheet:null;}
