@@ -1,5 +1,5 @@
 /* Production/mobile hardening layered on top of the V1.10 visual system. */
-.teamapp-auth-locked .app-shell{visibility:hidden;pointer-events:none;user-select:none}
+.teamapp-auth-locked .app-shell{display:none!important}
 .teamapp-auth-locked #cloudOverlay{visibility:visible}
 .teamapp-persistent-warning{position:fixed;left:12px;right:12px;top:12px;z-index:120;background:#fff3cd;color:#5f4700;border:1px solid #e3c45c;border-radius:14px;padding:12px 14px;font-weight:800;box-shadow:0 10px 30px rgba(0,0,0,.16)}
 .teamapp-list-filter{width:100%;min-height:44px;margin:0 0 10px;border:1px solid var(--line);border-radius:13px;background:var(--surface);color:var(--text);padding:10px 12px}
