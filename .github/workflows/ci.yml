@@ -40,8 +40,11 @@ jobs:
       - name: Run full regression suite
         run: npm test
 
-      - name: Verify release build and contracts
+      - name: Verify Pages release build and contracts
         run: npm run verify:release
+
+      - name: Compile scheduled Worker without deploying
+        run: npm run verify:worker
 
       - name: Verify tracked sources stay clean
         run: git diff --exit-code -- . ':!dist'
