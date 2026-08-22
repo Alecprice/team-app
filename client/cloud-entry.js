@@ -92,11 +92,31 @@ function buttonBusy(btn,busy,label='Working…'){if(!btn)return;btn.disabled=bus
 function roleFor(remoteId){return me?.teams?.find(t=>t.id===remoteId)?.role||null;}
 function activePayload(){return runtime?.getActiveCloudPayload?.()||null;}
 function activeRemoteId(){return activePayload()?.teamRecord?.remoteId||null;}
+async function queuedRows(){try{return await window.TEAM_APP_CLOUD_QUEUE?.entries?.()||[];}catch{return [];}}
+const syncResult=(status,extra={})=>({status,...extra});
+function syncResultMessage(result){
+  if(result?.status==='synced'||result?.status==='created')return 'Sync complete.';
+  if(result?.status==='queued')return 'Cloud is unavailable right now. Your coaching changes are saved on this device and queued to sync.';
+  if(result?.status==='conflict')return 'Sync conflict detected. This team changed on another device. Choose which copy to keep.';
+  if(result?.status==='queue-failed')return 'Your coaching changes remain saved locally, but they could not be added to the cloud sync queue. Reconnect before clearing site data or changing devices.';
+  if(result?.status==='auth-lost')return 'Your secure session expired. Sign in again before syncing.';
+  return 'Nothing new to sync.';
+}
 
 async function ensureCryptoIdentity(){if(!window.TEAM_APP_E2EE)return;const jwk=await window.TEAM_APP_E2EE.publicJwk();await api('/api/crypto-key',{method:'PUT',body:JSON.stringify({publicKeyJwk:jwk,algorithm:'ECDH-P256',version:1})});}
 
 async function start(rt){runtime=rt;if(location.search.includes('demo=1')){hydrating=false;return;}try{const r=await authClient.getSession();session=r?.data||r;if(!session?.user){showLogin();hydrating=false;return;}await afterLogin();}catch(err){console.error('[cloud start]',err);showLogin(err.message);hydrating=false;}}
-async function afterLogin(){session=(await authClient.getSession())?.data||session;const pendingInvite=new URLSearchParams(location.search).get('invite');if(pendingInvite){try{await api('/api/invitations/accept',{method:'POST',body:JSON.stringify({token:pendingInvite})});const u=new URL(location.href);u.searchParams.delete('invite');history.replaceState(null,'',u.pathname+u.search+u.hash);}catch(e){console.warn('[invite accept]',e);}}me=await api('/api/me');await ensureCryptoIdentity().catch(e=>console.warn('[e2ee identity]',e));if(!me.teams?.length){showFirstTeam();hydrating=false;return;}const cloudTeams=[];for(const t of me.teams){try{const detail=await api(`/api/teams/${t.id}/state`);revisions.set(t.id,Number(detail.revision||0));cloudTeams.push(detail);}catch(e){console.error('[cloud team]',t.id,e);}}runtime?.replaceCloudTeams?.(cloudTeams);hydrating=false;await flushQueue();runtime?.refresh?.();}
+async function afterLogin(){
+  session=(await authClient.getSession())?.data||session;
+  const pendingInvite=new URLSearchParams(location.search).get('invite');
+  if(pendingInvite){try{await api('/api/invitations/accept',{method:'POST',body:JSON.stringify({token:pendingInvite})});const u=new URL(location.href);u.searchParams.delete('invite');history.replaceState(null,'',u.pathname+u.search+u.hash);}catch(e){console.warn('[invite accept]',e);}}
+  me=await api('/api/me');await ensureCryptoIdentity().catch(e=>console.warn('[e2ee identity]',e));
+  if(!me.teams?.length){showFirstTeam();hydrating=false;return;}
+  const queued=new Map(await queuedRows()),cloudTeams=[];
+  for(const t of me.teams){try{const detail=await api(`/api/teams/${t.id}/state`);revisions.set(t.id,Number(detail.revision||0));cloudTeams.push(detail);}catch(e){console.error('[cloud team]',t.id,e);}}
+  if(queued.size){for(const detail of cloudTeams)if(!queued.has(detail.id))runtime?.replaceOneCloudTeam?.(detail);}else runtime?.replaceCloudTeams?.(cloudTeams);
+  hydrating=false;await flushQueue();runtime?.refresh?.();
+}
 
 function showLogin(message=''){
   const el=overlay(`<div class="cloud-auth"><div class="cloud-logo">TA</div><div class="eyebrow">Secure Team APP</div><h1>Sign in</h1><p>Adult coach and guardian accounts keep team data synchronized across devices.</p>${message?`<div class="cloud-error">${esc(message)}</div>`:''}<div class="cloud-tabs"><button data-auth-tab="signin" class="active">Sign in</button><button data-auth-tab="signup">Create account</button></div><form id="cloudAuthForm"><div class="field" data-name-field hidden><label>Name</label><input name="name" autocomplete="name"></div><div class="field"><label>Email</label><input name="email" type="email" autocomplete="username" required></div><div class="field"><label>Password</label><input name="password" type="password" minlength="10" autocomplete="current-password" required></div><label class="cloud-adult" data-adult-field hidden><input type="checkbox" name="adult"> I am an adult coach, staff member, or guardian.</label><button class="primary-btn cloud-wide" id="cloudAuthSubmit">Sign in</button></form><div class="cloud-auth-alt"><span class="cloud-small">Secure email/password sign-in is provided by Neon Managed Auth.</span></div><p class="cloud-small">Child athletes do not need accounts. Guardians manage youth profiles.</p></div>`);
@@ -109,12 +129,50 @@ function showFirstTeam(){const el=overlay(`<div class="eyebrow">First team</div>
 function cloudTeamToLocal(d){return {id:`cloud-${d.id}`,remoteId:d.id,name:d.name,shortName:d.short_name||'',sportKey:d.sport_key,sport:d.sport_key?.[0]?.toUpperCase()+d.sport_key?.slice(1),season:d.season_name||'Season',ageGroup:d.age_group||'',division:d.division||'',leagueKey:d.league_key||'recreation',leagueName:d.league_name||'Local Recreation League',governingBody:d.governing_body||'',competitionProfileId:d.competition_profile_key||'',ruleSet:d.rule_label||d.division||'Custom / Recreation',ruleSourceUrl:d.rule_source_url||'',ruleSourceNote:d.rule_source_note||'',localRulesNote:d.local_rules_note||'',localRuleDetails:d.local_rule_details||{},homeLocation:d.home_location||{},branding:d.branding||{},staff:Array.isArray(d.staff)?d.staff:[],color:d.color||d.branding?.primaryColor||'#0f4c3a',defaultLayouts:d.default_layouts||{}};}
 
 function scheduleSync(){if(hydrating||!runtime||!session)return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncActive().catch(e=>console.warn('[cloud sync]',e)),900);}
-async function syncActive(force=false){const p=activePayload();if(!p)return;if(!navigator.onLine){await queuePayload(p);return;}let remoteId=p.teamRecord.remoteId;if(!remoteId){if(!force)return;const created=await api('/api/teams',{method:'POST',body:JSON.stringify({name:p.teamRecord.name,shortName:p.teamRecord.shortName,sportKey:p.teamRecord.sportKey,season:p.teamRecord.season,teamRecord:p.teamRecord,context:p.context})});remoteId=created.team.id;revisions.set(remoteId,Number(created.revision||1));runtime.assignRemoteId?.(p.teamRecord.id,remoteId);me=await api('/api/me');return;}
-  if(conflicts.has(remoteId)&&!force)return;const revision=revisions.get(remoteId)??0;try{const result=await api(`/api/teams/${remoteId}/state`,{method:'PUT',body:JSON.stringify({revision,teamRecord:p.teamRecord,context:p.context})});revisions.set(remoteId,Number(result.revision));await removeQueued(remoteId);}
-  catch(e){if(e.status===409){conflicts.set(remoteId,e.data);runtime.toast?.('Cloud conflict: this team changed on another device. Open Account to resolve.');return;}await queuePayload(p);if(e.status===401){handleAuthLoss();return;}throw e;}}
-async function queuePayload(p){if(!p?.teamRecord?.remoteId)return false;const ok=await window.TEAM_APP_CLOUD_QUEUE?.put?.(p.teamRecord.remoteId,{teamRecord:p.teamRecord,context:p.context});if(ok===false)runtime?.toast?.('Offline changes are saved on this device, but the cloud sync queue is full. Reconnect before closing the app.');return ok!==false;}
+async function syncActive(force=false){
+  const p=activePayload();if(!p)return syncResult('noop');
+  if(!navigator.onLine){const queued=await queuePayload(p);return syncResult(queued?'queued':'queue-failed');}
+  let remoteId=p.teamRecord.remoteId;
+  if(!remoteId){if(!force)return syncResult('noop');const created=await api('/api/teams',{method:'POST',body:JSON.stringify({name:p.teamRecord.name,shortName:p.teamRecord.shortName,sportKey:p.teamRecord.sportKey,season:p.teamRecord.season,teamRecord:p.teamRecord,context:p.context})});remoteId=created.team.id;const revision=Number(created.revision||1);revisions.set(remoteId,revision);runtime.assignRemoteId?.(p.teamRecord.id,remoteId);me=await api('/api/me');return syncResult('created',{remoteId,revision});}
+  if(conflicts.has(remoteId)&&!force)return syncResult('conflict',{remoteId,conflict:conflicts.get(remoteId)});
+  const revision=revisions.get(remoteId)??0;
+  try{const result=await api(`/api/teams/${remoteId}/state`,{method:'PUT',body:JSON.stringify({revision,teamRecord:p.teamRecord,context:p.context})});const nextRevision=Number(result.revision);revisions.set(remoteId,nextRevision);await removeQueued(remoteId);return syncResult('synced',{remoteId,revision:nextRevision});}
+  catch(e){
+    if(e.status===409){const conflict=e.data||{};conflicts.set(remoteId,conflict);runtime.toast?.('Cloud conflict: this team changed on another device. Open Account to resolve.');return syncResult('conflict',{remoteId,conflict});}
+    if(e.status===401){handleAuthLoss();return syncResult('auth-lost',{remoteId});}
+    if(!e.status||e.status===429||e.status>=500){const queued=await queuePayload(p);if(queued)return syncResult('queued',{remoteId,error:e});return syncResult('queue-failed',{remoteId,error:e});}
+    throw e;
+  }
+}
+async function queuePayload(p){
+  const remoteId=p?.teamRecord?.remoteId;if(!remoteId)return false;
+  const queue=window.TEAM_APP_CLOUD_QUEUE;if(!queue?.put){runtime?.toast?.('Offline cloud queue is unavailable. Your coaching changes remain local only on this device.');return false;}
+  const existing=(await queuedRows()).find(([id])=>id===remoteId)?.[1],existingBase=Number(existing?.baseRevision),currentBase=Number(revisions.get(remoteId));
+  const baseRevision=Number.isFinite(existingBase)?existingBase:(Number.isFinite(currentBase)?currentBase:0);
+  const ok=await queue.put(remoteId,{baseRevision,teamRecord:p.teamRecord,context:p.context});
+  if(ok===false)runtime?.toast?.('Your coaching changes remain saved locally, but this team could not be added to the cloud sync queue. Reconnect before clearing site data or changing devices.');
+  return ok===true;
+}
 async function removeQueued(id){await window.TEAM_APP_CLOUD_QUEUE?.remove?.(id);}
-async function flushQueue(){if(!navigator.onLine)return;const rows=await window.TEAM_APP_CLOUD_QUEUE?.entries?.()||[];for(const [id,p] of rows){if(conflicts.has(id))continue;try{const result=await api(`/api/teams/${id}/state`,{method:'PUT',body:JSON.stringify({revision:revisions.get(id)||0,teamRecord:p.teamRecord,context:p.context})});revisions.set(id,Number(result.revision));await removeQueued(id);}catch(e){if(e.status===409)conflicts.set(id,e.data);else if(e.status===401){handleAuthLoss();break;}}}}
+async function flushQueue(){
+  const outcomes=[];if(!navigator.onLine)return outcomes;
+  const rows=await queuedRows();
+  for(const [id,p] of rows){
+    if(conflicts.has(id)){outcomes.push(syncResult('conflict',{remoteId:id,conflict:conflicts.get(id)}));continue;}
+    const baseRevision=Number(p?.baseRevision);
+    if(!Number.isFinite(baseRevision)){
+      const conflict={revision:Number(revisions.get(id)||0),reason:'queued_revision_missing'};conflicts.set(id,conflict);runtime?.toast?.('Saved offline changes need review before cloud sync because they were created by an older queue format. Open Account to choose which copy to keep.');outcomes.push(syncResult('conflict',{remoteId:id,conflict}));continue;
+    }
+    try{const result=await api(`/api/teams/${id}/state`,{method:'PUT',body:JSON.stringify({revision:baseRevision,teamRecord:p.teamRecord,context:p.context})});const nextRevision=Number(result.revision);revisions.set(id,nextRevision);await removeQueued(id);outcomes.push(syncResult('synced',{remoteId:id,revision:nextRevision}));}
+    catch(e){
+      if(e.status===409){const conflict=e.data||{revision:Number(revisions.get(id)||baseRevision)};conflicts.set(id,conflict);runtime?.toast?.('Cloud conflict: saved offline changes were based on an older team version. Open Account to resolve.');outcomes.push(syncResult('conflict',{remoteId:id,conflict}));}
+      else if(e.status===401){handleAuthLoss();outcomes.push(syncResult('auth-lost',{remoteId:id}));break;}
+      else if(!e.status||e.status===429||e.status>=500)outcomes.push(syncResult('queued',{remoteId:id,error:e}));
+      else{const conflict={revision:Number(revisions.get(id)||baseRevision),reason:'sync_rejected',message:e.message};conflicts.set(id,conflict);runtime?.toast?.('Saved offline changes could not be accepted by the cloud. Open Account to review before retrying.');outcomes.push(syncResult('conflict',{remoteId:id,conflict}));}
+    }
+  }
+  return outcomes;
+}
 window.addEventListener('online',()=>flushQueue().then(()=>syncActive().catch(console.warn)).catch(console.warn));
 
 function renderCoachPanel(){if(!session)return '';const p=activePayload(),rid=p?.teamRecord?.remoteId,role=rid?roleFor(rid):null;return `<section class="card cloud-coach-card" style="margin-top:14px"><div class="card-title-row"><div><h3>Cloud team service</h3><div class="card-sub">${rid?`Synced · ${esc(role||'member')}`:'This device team is not published yet.'}</div></div><button class="secondary-btn small-btn" id="cloudAccountOpen">Account</button></div><div class="cloud-action-grid"><button class="secondary-btn" id="cloudAccessBtn" ${rid?'':'disabled'}>Team access</button><button class="secondary-btn" id="cloudMessagesBtn" ${rid?'':'disabled'}>Messages</button><button class="secondary-btn" id="cloudFormsBtn" ${rid?'':'disabled'}>Forms</button><button class="secondary-btn" id="cloudDocsBtn" ${rid?'':'disabled'}>Cloud documents</button></div>${!rid?`<button class="primary-btn cloud-wide" id="publishTeamBtn">Publish this team to cloud</button>`:''}</section>`;}
@@ -125,10 +183,15 @@ function openAccount(){
   const rid=activeRemoteId(),conflict=rid&&conflicts.get(rid);const el=overlay(`<div class="card-title-row"><div><div class="eyebrow">Account</div><h2>${esc(session?.user?.name||session?.user?.email||'Team APP')}</h2><div class="card-sub">${esc(session?.user?.email||'')}</div></div><button class="secondary-btn small-btn" data-cloud-close>Close</button></div>${conflict?`<div class="cloud-error"><strong>Sync conflict</strong><p>This team was updated elsewhere. Choose which copy to keep.</p><div class="cloud-actions"><button class="secondary-btn" id="useRemoteBtn">Use cloud copy</button><button class="danger-btn" id="forceLocalBtn">Keep this device copy</button></div></div>`:''}<div class="cloud-action-grid"><button class="secondary-btn" id="authStatusBtn">Neon Auth active</button><button class="secondary-btn" id="enablePushBtn">Enable notifications</button><button class="secondary-btn" id="flushSyncBtn">Sync now</button><button class="danger-btn" id="signOutBtn">Sign out</button></div>${rid?`<div class="separator"></div><div id="notificationPrefs"><div class="card-sub">Loading notification preferences…</div></div>`:''}<div class="separator"></div><form id="redeemJoinCodeForm" class="cloud-inline-form"><div class="field"><label>Join a team with a code</label><input name="code" maxlength="12" placeholder="ABCD1234" required></div><button class="secondary-btn">Join team</button></form><div class="separator"></div><h3>Your teams</h3><div class="cloud-team-list">${(me?.teams||[]).map(t=>`<div><strong>${esc(t.name)}</strong><span>${esc(t.sport_name)} · ${esc(t.season_name)} · ${esc(t.role)}</span></div>`).join('')}</div>`);
   el.querySelectorAll('[data-cloud-close]').forEach(b=>b.onclick=closeOverlay);
   el.querySelector('#authStatusBtn')?.addEventListener('click',()=>alert('Team APP is using Neon Managed Auth. Passkeys are not enabled in the current managed provider.'));
-  el.querySelector('#enablePushBtn').onclick=enablePush;el.querySelector('#flushSyncBtn').onclick=()=>syncActive(true).then(()=>alert('Sync complete.')).catch(e=>alert(e.message));el.querySelector('#signOutBtn').onclick=async()=>{await authClient.signOut();location.reload();};
+  el.querySelector('#enablePushBtn').onclick=enablePush;
+  el.querySelector('#flushSyncBtn').onclick=async()=>{try{const result=await syncActive(true);alert(syncResultMessage(result));if(result.status==='conflict')openAccount();}catch(e){alert(e.message);}};
+  el.querySelector('#signOutBtn').onclick=async()=>{await authClient.signOut();location.reload();};
   el.querySelector('#redeemJoinCodeForm').onsubmit=async e=>{e.preventDefault();const code=new FormData(e.currentTarget).get('code');try{await api('/api/join-codes/redeem',{method:'POST',body:JSON.stringify({code})});closeOverlay();await afterLogin();alert('Team joined successfully.');}catch(err){alert(err.message);}};
   if(rid)renderNotificationPreferences(el,rid).catch(err=>{const target=el.querySelector('#notificationPrefs');if(target)target.innerHTML=`<div class="cloud-error">${esc(err.message)}</div>`;});
-  if(conflict){el.querySelector('#useRemoteBtn').onclick=async()=>{const fresh=await api(`/api/teams/${rid}/state`);revisions.set(rid,Number(fresh.revision));conflicts.delete(rid);runtime.replaceOneCloudTeam?.(fresh);closeOverlay();};el.querySelector('#forceLocalBtn').onclick=async()=>{revisions.set(rid,Number(conflict.revision||0));conflicts.delete(rid);await syncActive(true);closeOverlay();};}
+  if(conflict){
+    el.querySelector('#useRemoteBtn').onclick=async()=>{const fresh=await api(`/api/teams/${rid}/state`);revisions.set(rid,Number(fresh.revision));conflicts.delete(rid);await removeQueued(rid);runtime.replaceOneCloudTeam?.(fresh);closeOverlay();runtime?.toast?.('Cloud copy restored on this device.');};
+    el.querySelector('#forceLocalBtn').onclick=async()=>{revisions.set(rid,Number(conflict.revision||0));conflicts.delete(rid);const result=await syncActive(true);if(result.status==='synced'||result.status==='created'){closeOverlay();runtime?.toast?.('This device copy is now saved to cloud.');}else{alert(syncResultMessage(result));openAccount();}};
+  }
 }
 async function renderNotificationPreferences(el,rid){const prefs=await api(`/api/teams/${rid}/notification-preferences`),target=el.querySelector('#notificationPrefs');if(!target)return;const labels={messages:'Messages',schedule:'Schedule changes',weather:'Weather alerts',documents:'Documents',forms:'Forms'};target.innerHTML=`<form id="notificationPrefsForm"><div class="card-title-row"><div><h3>Notifications</h3><div class="card-sub">Choose alerts for this team.</div></div></div><div class="cloud-pref-grid">${Object.entries(labels).map(([k,l])=>`<label><input type="checkbox" name="${k}" ${prefs[k]?'checked':''}> <span>${l}</span></label>`).join('')}</div><button class="secondary-btn cloud-wide">Save notification settings</button></form>`;target.querySelector('#notificationPrefsForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.currentTarget),body={};for(const k of Object.keys(labels))body[k]=Boolean(f.get(k));await api(`/api/teams/${rid}/notification-preferences`,{method:'PUT',body:JSON.stringify(body)});alert('Notification settings saved.');};}
 
