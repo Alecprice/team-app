@@ -41,18 +41,8 @@ jobs:
       - name: Run full regression suite
         run: npm test
 
-      - name: Build Cloudflare Pages output
-        run: npm run build
-
-      - name: Verify required production assets
-        run: |
-          test -s dist/index.html
-          test -s dist/cloud-client.js
-          test -s dist/sw.js
-          test -s dist/manifest.webmanifest
-          test -s dist/_headers
-          grep -q "Content-Security-Policy:" dist/_headers
-          grep -q '"display": "standalone"' dist/manifest.webmanifest
+      - name: Verify release build and contracts
+        run: npm run verify:release
 
       - name: Verify tracked sources stay clean
         run: git diff --exit-code -- . ':!dist'
