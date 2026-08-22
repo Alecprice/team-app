@@ -1,11 +1,13 @@
 (function(global){'use strict';
-  const DB='team-app-e2ee-v1',STORE='keys';
+  const DB='team-app-e2ee-v2',STORE='keys',ACCOUNT_MARKER='team-app-last-auth-user';
   const enc=new TextEncoder(),dec=new TextDecoder();
+  function account(){try{return global.localStorage?.getItem(ACCOUNT_MARKER)||'unclaimed';}catch{return 'unclaimed';}}
+  function scoped(key){return `${account()}:${key}`;}
   function b64(bytes){let s='';for(const x of new Uint8Array(bytes))s+=String.fromCharCode(x);return btoa(s);}
   function unb64(s){const bin=atob(String(s));const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
-  function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-  async function get(key){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),r=tx.objectStore(STORE).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-  async function put(key,value){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(value,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});}
+  function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(STORE))r.result.createObjectStore(STORE);};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+  async function get(key){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),r=tx.objectStore(STORE).get(scoped(key));r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+  async function put(key,value){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(value,scoped(key));tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});}
   async function ensureIdentity(){let pair=await get('identity');if(pair?.privateKey&&pair?.publicKey)return pair;pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},false,['deriveBits']);await put('identity',pair);return pair;}
   async function publicJwk(){const pair=await ensureIdentity();return crypto.subtle.exportKey('jwk',pair.publicKey);}
   async function importPublic(jwk){return crypto.subtle.importKey('jwk',jwk,{name:'ECDH',namedCurve:'P-256'},false,[]);}
