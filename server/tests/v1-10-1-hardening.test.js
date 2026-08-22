@@ -41,12 +41,14 @@ test('cloud admin hardening uses the documented recovery adapter and access life
   for(const action of ['member.role.update','member.remove','team.owner.transfer','invitation.revoke'])assert.ok(source.includes(action),`missing cloud admin action ${action}`);
 });
 
-test('release build has environment-specific endpoint replacement and build identity',()=>{
+test('release build has environment-specific endpoints, serialized sync, safer messaging, and build identity',()=>{
   const build=read('scripts/build-cloudflare.js'),smoke=read('scripts/smoke-production.mjs');
-  assert.ok(build.includes('TEAM_APP_NEON_AUTH_URL'));
-  assert.ok(build.includes('TEAM_APP_NEON_DATA_API_URL'));
-  assert.ok(build.includes('build-info.json'));
-  assert.ok(build.includes('Message was not sent. Your draft is still here.'));
+  for(const token of [
+    'TEAM_APP_NEON_AUTH_URL','TEAM_APP_NEON_DATA_API_URL','build-info.json',
+    'Message was not sent. Your draft is still here.','syncTail=Promise.resolve()',
+    "document.visibilityState==='visible'",'setInterval(poll,8000)',
+    "coach||coachRoles.has(m.role)"
+  ]) assert.ok(build.includes(token),`missing release build hardening: ${token}`);
   assert.ok(smoke.includes("'/build-info.json'"));
   assert.ok(smoke.includes('TEAM_APP_EXPECT_COMMIT'));
 });
