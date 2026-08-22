@@ -1,6 +1,6 @@
 # Team APP V1.10 Release Readiness
 
-Status: **NO-GO for real-family production use until the staging gates below are completed.**
+Status: **NO-GO for real-family production use until the remaining staging gates below are completed.**
 
 This is intentional. V1.10 closes multiple defects found by adversarial testing, but software cannot be proven defect-free. Release readiness is based on explicit evidence and gates rather than a claim of zero bugs.
 
@@ -27,12 +27,14 @@ This is intentional. V1.10 closes multiple defects found by adversarial testing,
 - Cloudflare Pages CSP, anti-framing and basic security headers.
 - Legacy Express status propagation, document visibility and S3 metadata verification contracts.
 
-## Proven on isolated Neon QA branch
+## Proven on Neon
 
-The V1.10 Data API migration was compiled on an isolated branch cloned from the current Team APP database. Production was not modified.
+The V1.10 Data API migration was first compiled and exercised on an isolated release-candidate branch cloned from Team APP main.
 
-Verified:
-- exact `app_api(text,jsonb)` dispatcher compiled;
+The live Neon `main` branch was subsequently inspected and verified to match the V1.10 release-candidate schema with an empty schema diff.
+
+Verified on the current main schema:
+- exact `app_api(text,jsonb)` dispatcher exists;
 - atomic optimistic revision update is present;
 - atomic join-code max-use claim is present;
 - helper functions compile against the existing schema;
@@ -44,14 +46,29 @@ Verified:
 - exactly one authenticated client RPC is executable: `app_api`;
 - zero legacy/helper `app_*` RPCs remain client-executable;
 - zero direct authenticated/anonymous public-table CRUD grants;
-- rate guard accepted 120 calls and rejected call 121.
+- Neon Auth and Data API support roles/schemas are present;
+- rate guard accepted 120 calls and rejected call 121 during QA validation.
 
 Upgrade file: `sql/upgrade-v1.9-to-v1.10.sql`.
+
+## Dependency/build reproducibility — PASS
+
+The repository now contains a committed npm lockfile and exact direct build dependency pins:
+
+- `@neondatabase/neon-js` 0.7.0-beta
+- `esbuild` 0.28.1
+- `wrangler` 4.123.0
+- Playwright 1.62.0 for browser regression tests
+
+A clean `npm ci` install completed with zero reported npm audit vulnerabilities. Transitive Better Auth/Neon Auth peer-resolution warnings remain visible and should continue to be regression-tested rather than hidden.
+
+GitHub CI now installs from the lockfile, installs the pinned Python Playwright dependency and Chromium, runs the full regression suite, and runs `npm run verify:release`.
 
 ## Release blockers / mandatory staging gates
 
 ### 1. Cloudflare Pages + real HTTPS PWA
 Must be tested on the actual Cloudflare Pages production candidate:
+- public production smoke workflow passes;
 - install as PWA;
 - close/reopen;
 - offline reload;
@@ -60,8 +77,10 @@ Must be tested on the actual Cloudflare Pages production candidate:
 - V1.9 -> V1.10 service-worker/cache upgrade;
 - actual CSP/header behavior.
 
+A manual GitHub **Production Smoke** workflow now checks the public root, production cloud bundle, service worker, manifest, baseline headers, and PWA static contract. That workflow is a prerequisite, not a replacement for the device tests above.
+
 ### 2. Real Neon Auth + Data API HTTP
-The SQL compiles on QA, but a browser must exercise real JWTs through the public Data API:
+Database-side configuration is present, but a real browser must exercise actual sessions/JWTs through the public Data API:
 - coach signup/login/session expiry;
 - guardian signup/invite/join;
 - two-account role boundaries;
@@ -71,34 +90,27 @@ The SQL compiles on QA, but a browser must exercise real JWTs through the public
 ### 3. Two-device concurrency
 The lost-update race is fixed atomically in SQL. It still needs an actual two-device/two-session collision test against staging.
 
-### 4. Dependency lockfile
-Direct build dependencies are pinned exactly:
-- `@neondatabase/neon-js` 0.6.2-beta
-- `esbuild` 0.28.1
-
-The sandbox cannot reach npm long enough to generate `package-lock.json`; `npm install --package-lock-only` timed out. Before production, generate and commit a lockfile on a networked runner, use `npm ci`, and run an advisory audit. A production build without a committed lockfile is not approved.
-
-### 5. E2EE lost-device recovery decision
+### 4. E2EE lost-device recovery decision
 Key rotation/history works while old device keys remain available. There is not yet account-backed recovery of old conversation keys after browser/device storage loss. Decide whether encrypted message history must survive a lost/replaced phone.
 
-### 6. Coach-private note encryption decision
+### 5. Coach-private note encryption decision
 The static Neon path isolates coach-private notes through the RPC permission layer and Neon storage protections, but those notes are not end-to-end encrypted from database operators. Decide whether strict role isolation is sufficient or client-side encryption is required.
 
-### 7. Closed-app push
+### 6. Closed-app push
 Notification preferences and service-worker handling exist, but closed-app Web Push requires a deployed push worker/VAPID path. It is not production-complete.
 
-### 8. File storage scale
+### 7. File storage scale
 Current credential-free Data API document staging is capped at 5 MB/file and 50 MB/team. The S3-compatible object-storage path is code-hardened but has not been live stress-tested. Large photo/video sharing should not launch on DB blobs.
 
-### 9. Automatic invitation email
+### 8. Automatic invitation email
 Current credential-free flow can produce an invitation/join link/code for a coach to share. Automatic email delivery is not configured.
 
-### 10. Sport/rule content validation
+### 9. Sport/rule content validation
 The engine is six-sport capable, but non-baseball instructional content is intentionally not treated as fully vetted. League/local rules must remain source-linked and coach-reviewed.
 
-## External platform maturity note
+## Platform maturity note
 
-As of this audit, Neon's Data API is documented as beta and the published `@neondatabase/neon-js` package is `0.6.2-beta`. This is acceptable for controlled staging, but it increases the importance of exact dependency pins, a lockfile, staging monitoring and rollback readiness.
+The current client intentionally pins the beta `@neondatabase/neon-js` integration used by this release. Beta infrastructure increases the importance of exact dependency pins, a committed lockfile, automated regression coverage, staging monitoring, and rollback readiness.
 
 ## Launch rule
 
