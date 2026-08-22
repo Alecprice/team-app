@@ -1,92 +1,190 @@
-# Team APP V1.8 Security Architecture
+# Team APP V1.10 Security Architecture
+
+## Launch posture
+
+V1.10 is a hardened staging candidate, not an authorization to invite real families. Security readiness is evidence-based and the remaining live-device/account gates are tracked in `RELEASE_READINESS.md`.
 
 ## Core principles
 
-- adult accounts; child athletes are profiles
+- adult accounts; child athletes are profiles, not login identities
 - least-privilege team roles
-- authorization in API/database workflows, not only UI hiding
-- HTTPS/TLS in production
-- private object storage
-- encryption at rest
+- authorization enforced in database/API workflows, not only by hiding UI
+- HTTPS/TLS for the production origin
+- no direct authenticated/anonymous CRUD grants on public application tables
+- one consolidated client RPC entry point
 - client-side E2EE for private message bodies
-- explicit audit events for high-value changes
+- explicit ownership and relationship checks for guardian workflows
+- bounded payload/document sizes
 - data minimization for youth profiles
 - no advertising/tracking requirement in the youth experience
 
-## Authentication
+## Primary V1.10 identity and data path
 
-The source service uses a passkey-capable Better Auth adapter in a separate PostgreSQL `auth` schema. Email/password and magic-link flows are also supported. Production secrets must be stored in the hosting platform, never committed.
+The Cloudflare Pages client uses **Neon Managed Auth** for adult sessions and the **Neon Data API** for application calls.
 
-Child athletes do not sign up.
+The browser client maps Team APP actions to one PostgreSQL dispatcher:
+
+```text
+app_api(text, jsonb)
+```
+
+The live V1.10 Neon `main` schema has been inspected and currently enforces the intended client boundary:
+
+- `authenticated` has EXECUTE on `app_api` among the application `app_*` functions
+- internal/legacy `app_*` helpers are not client-executable
+- authenticated/anonymous roles have no direct CRUD grants on public application tables
+
+The older Node/Express + self-hosted Better Auth implementation remains in the repository for compatibility/reference testing. It must not be operated as a second authoritative identity provider beside Neon Managed Auth for the same deployment.
 
 ## Authorization
 
-Roles include owner, admin, coach, assistant coach, manager, guardian, member and read-only. Server middleware verifies team membership for every team-scoped request.
+Roles include owner, admin, coach, assistant coach, manager, guardian, member, and read-only.
 
-Non-coach clients receive a reduced team-state projection and do not receive private development/lineup-planning state simply because the frontend bundle contains coach code.
+V1.10 database/RPC checks cover team membership and role-sensitive operations including team state, invitations/join codes, documents, forms, availability, conversations, and notification preferences.
 
-## Browser request protection
+Important boundaries include:
 
-State-changing custom API requests reject cross-site browser requests using `Sec-Fetch-Site` and trusted Origin checks. Better Auth maintains its own auth request protections.
+- non-coach team-state projection is reduced
+- conversation listing is active-team scoped
+- guardian athlete actions require the corresponding relationship/permission
+- form submissions require ownership and, where applicable, unambiguous assignment selection
+- direct document access uses the same visibility rules as document listing
 
-## Private coaching information
+## Cloud synchronization
 
-Coach notes and player-development state are split away from the operational team snapshot and encrypted at rest with a dedicated application data key. A production data key must be independent from the authentication secret.
+Team state uses optimistic revisions. V1.10 advances a revision with an atomic conditional database update so two clients cannot both successfully claim the same prior revision.
 
-## Messaging
+The browser is offline-first:
 
-Private messages use client-side E2EE. PostgreSQL stores ciphertext and cryptographic envelopes, not plaintext message bodies. Push notifications use generic text.
+- offline cloud changes are queued locally in IndexedDB with a localStorage fallback
+- queue entries are bounded by count and item size
+- reconnect attempts queue replay
+- revision conflicts are surfaced rather than silently overwriting another device
 
-Metadata such as sender, conversation, membership and timestamp remains server-visible because it is required for routing/authorization.
+The production HTML shell explicitly loads the queue module before the cloud client, and release tests verify that wiring.
+
+Real two-session collision and offline/reconnect tests against the deployed Pages origin remain mandatory staging gates.
+
+## Messaging and E2EE
+
+Private message bodies are encrypted in the browser before upload.
+
+- ECDH P-256 device identity keys
+- HKDF-SHA256 conversation-key wrapping
+- AES-GCM message encryption
+- per-recipient key envelopes
+- versioned conversation keys
+- sender public-key snapshots for historical key-version recovery on retained devices
+
+PostgreSQL stores ciphertext and required routing/authorization metadata. Sender, conversation membership, timestamps, and similar metadata remain server-visible.
+
+A replaced/lost device does not yet have an account-backed recovery mechanism for all historical conversation keys. That policy/product decision remains a launch blocker.
+
+## Coach-private information
+
+The current static Neon path relies on RPC authorization and Neon storage protections for coach-private notes. Those notes are **not** end-to-end encrypted from the database/operator layer.
+
+Before broad launch, decide whether strict server-side role isolation is sufficient or whether coach-private notes require client-side encryption similar to private messages.
 
 ## Documents
 
-- private bucket in production
-- signed upload/download URLs
-- SSE-KMS when configured, otherwise AES-256 server-side storage encryption request
-- file-size limit
-- file extension + declared MIME allowlist
-- HTML/SVG/active-web document types rejected
-- downloads forced as attachments / octet-stream
-- private visibility means uploader-private
-- completion state prevents incomplete uploads from appearing
-- acknowledgments are recorded separately
+The current browser/Data API document path is deliberately bounded for controlled staging and smaller documents.
 
-File scanning/antivirus is still recommended before a public launch if uploads will be accepted from a broad user base.
+Security controls include:
+
+- file-size/team-storage limits
+- file name/type validation
+- HTML/SVG/active web content rejection
+- visibility/ownership checks on list, direct access, acknowledgment, and deletion paths
+- incomplete uploads are not exposed as completed documents
+- acknowledgments are tracked separately
+
+Large photo/video sharing should not launch on database blobs. The retained S3-compatible service path has additional storage hardening but still needs live object-storage validation before it becomes a production path.
+
+Malware/virus scanning is recommended before accepting uploads from a broad public user base.
 
 ## Forms and signatures
 
-- assignments belong to specific adult users and optionally athletes
-- guardians can only submit athlete-linked forms for linked children with `may_complete_forms`
-- required and typed field validation occurs server-side
-- unknown fields are rejected
-- explicit signature consent is stored
-- drawn signature data is encrypted at rest
+V1.10 validates form ownership and assignment boundaries in the data layer.
+
+- assignments target specific adult users and optionally linked athletes
+- guardian/athlete relationships are checked before athlete-linked submission
+- ambiguous assignment selection is rejected
+- required checkbox/signature behavior is validated
+- answer/payload size is bounded
+- restricted forms require appropriate assignees/visibility
+
+A typed electronic-signature model is supported by the Cloudflare/Neon client. Any legal reliance on signatures still requires jurisdiction/use-case review.
 
 ## Invitations and join codes
 
-Plain invitation tokens and join codes are never stored. Only SHA-256 hashes are retained. Invitations expire and are email-bound. Join codes support expiration and max-use limits.
+Invitation/join workflows are team-scoped. Join-code redemption uses an atomic conditional claim so concurrent requests cannot exceed the configured maximum use count.
+
+Invitation email delivery is not yet production-complete; the current credential-free flow can generate a link/code for manual sharing.
 
 ## Availability
 
-A guardian can update availability only for an athlete linked to that guardian with availability permission. Coaches can manage the full active roster. Changes are audited.
+Guardians can update availability only for appropriately linked athletes; coach roles can manage the team view. Availability changes remain team/event scoped.
 
-## Push
+## Push and background jobs
 
-Push subscriptions are user-scoped. Each team has category preferences. E2EE message plaintext is never inserted into push payloads.
+The PWA service worker contains notification handling and the app stores category preferences, but **closed-app Web Push is not production-complete** until the secret-backed `team-app-jobs` Worker/provider path is configured and validated.
+
+Notification payloads for private messages must remain generic and must not expose E2EE plaintext.
+
+## Browser security headers
+
+The Cloudflare Pages `_headers` contract includes:
+
+- Content Security Policy
+- `frame-ancestors 'none'`
+- `X-Frame-Options: DENY`
+- `X-Content-Type-Options: nosniff`
+- HSTS
+- strict-origin referrer policy
+- permissions policy
+
+The CSP restricts script/object/base/frame behavior and explicitly allows the current Neon Auth/Data API plus National Weather Service connections required by the client.
+
+`npm run verify:release` checks these baseline contracts before deployment, and the manual **Production Smoke** workflow checks the actual public response headers after deployment.
+
+## Dependency and release security
+
+- direct release dependencies are pinned
+- `package-lock.json` is committed
+- CI uses `npm ci`
+- Python Playwright is pinned for browser regression testing
+- CI installs Chromium explicitly before browser tests
+- release verification checks PWA/runtime asset wiring
+- a clean `npm ci` run reported zero npm audit vulnerabilities during the current V1.10 hardening pass
+
+Transitive peer/deprecation warnings are not hidden; they should remain visible and regression-tested while the Neon/Better Auth beta dependency tree evolves.
 
 ## Logging
 
-Do not log document bytes, auth secrets, encryption keys, message plaintext, signature payloads, or sensitive coach notes. Production error responses hide server exception detail.
+Do not log:
+
+- document bytes
+- auth tokens/secrets
+- encryption keys
+- message plaintext
+- signature payloads
+- sensitive coach notes
+- complete youth-profile state in diagnostic logs
+
+Production-facing errors should avoid returning internal exception detail.
 
 ## Remaining production hardening
 
-Before a broad public launch:
+Before broad public launch:
 
-- malware/virus scanning for uploaded files
-- distributed/rate-limit store rather than per-instance memory
-- centralized structured security/event logs
-- backup/restore drills
-- dependency/SBOM/vulnerability scanning in CI
-- staging auth/email/storage/push end-to-end tests
-- legal/privacy review for the actual jurisdictions, leagues and data collected
+- complete real Pages/PWA/auth/Data API/two-device staging gates
+- decide E2EE lost-device recovery requirements
+- decide coach-private-note client encryption requirements
+- validate closed-app push and automatic email delivery before enabling them
+- move large documents/media to a validated private object-storage path
+- add malware scanning if broad uploads are enabled
+- add centralized structured security/event logging
+- establish backup/restore drills and operational incident procedures
+- add SBOM/dependency scanning beyond the current npm audit/release checks
+- perform privacy/legal review for the actual jurisdictions, leagues, and data collected
