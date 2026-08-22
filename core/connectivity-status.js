@@ -1,0 +1,58 @@
+(function(root){
+  'use strict';
+
+  const ID='teamConnectivityStatus';
+  let observer=null,timer=null,updating=false;
+
+  async function pendingCount(){
+    try{return (await root.TEAM_APP_CLOUD_QUEUE?.entries?.()||[]).length;}catch{return 0;}
+  }
+
+  function ensureChip(){
+    const topbar=document.querySelector('.topbar-inner');
+    if(!topbar)return null;
+    let chip=document.getElementById(ID);
+    if(chip&&chip.parentElement===topbar)return chip;
+    chip?.remove();
+    chip=document.createElement('div');
+    chip.id=ID;
+    chip.className='connectivity-chip';
+    chip.setAttribute('role','status');
+    chip.setAttribute('aria-live','polite');
+    chip.innerHTML='<span class="connectivity-dot" aria-hidden="true"></span><span class="connectivity-label">Checking…</span>';
+    const account=topbar.querySelector('#cloudAccountBtn');
+    if(account)topbar.insertBefore(chip,account);else topbar.appendChild(chip);
+    return chip;
+  }
+
+  async function update(){
+    if(updating)return;
+    updating=true;
+    try{
+      const chip=ensureChip();if(!chip)return;
+      const pending=await pendingCount(),online=navigator.onLine!==false;
+      let mode='online',label='Online',detail='Online and no offline changes are waiting to sync.';
+      if(!online){
+        mode='offline';label=pending?`Offline · ${pending} saved`:'Offline';detail=pending?`${pending} team update${pending===1?' is':'s are'} saved on this device and will sync after reconnecting.`:'Offline. Team APP remains available from this device where cached.';
+      }else if(pending){
+        mode='pending';label=`Sync pending · ${pending}`;detail=`${pending} saved team update${pending===1?' is':'s are'} waiting for cloud synchronization.`;
+      }
+      chip.dataset.state=mode;
+      chip.querySelector('.connectivity-label').textContent=label;
+      chip.setAttribute('aria-label',detail);
+      chip.title=detail;
+    }finally{updating=false;}
+  }
+
+  function start(){
+    if(observer)return;
+    observer=new MutationObserver(()=>{if(!document.getElementById(ID))update();});
+    const app=document.getElementById('app');if(app)observer.observe(app,{childList:true,subtree:true});
+    root.addEventListener('online',update);
+    root.addEventListener('offline',update);
+    timer=root.setInterval(update,5000);
+    update();
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+})(typeof window!=='undefined'?window:globalThis);
