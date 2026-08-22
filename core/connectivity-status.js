@@ -37,11 +37,17 @@
       }else if(pending){
         mode='pending';label=`Sync pending · ${pending}`;detail=`${pending} saved team update${pending===1?' is':'s are'} waiting for cloud synchronization.`;
       }
+      const labelEl=chip.querySelector('.connectivity-label');
+      const changed=chip.dataset.state!==mode||labelEl?.textContent!==label||chip.getAttribute('aria-label')!==detail;
+      if(!changed)return;
       chip.dataset.state=mode;
-      chip.querySelector('.connectivity-label').textContent=label;
+      if(labelEl)labelEl.textContent=label;
       chip.setAttribute('aria-label',detail);
       chip.title=detail;
-    }finally{updating=false;}
+    }finally{
+      updating=false;
+      if(!document.getElementById(ID))root.setTimeout(update,0);
+    }
   }
 
   function start(){
