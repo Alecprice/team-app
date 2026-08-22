@@ -25,12 +25,23 @@
     return chip;
   }
 
+  function updateCoachPanel(online,pending){
+    const sub=document.querySelector('.cloud-coach-card .card-sub');
+    if(!sub)return;
+    const match=sub.textContent.match(/^(?:Synced|Sync pending|Offline changes saved) · (.+)$/);
+    if(!match)return;
+    const role=match[1],prefix=!online&&pending?'Offline changes saved':pending?'Sync pending':'Synced';
+    const next=`${prefix} · ${role}`;
+    if(sub.textContent!==next)sub.textContent=next;
+  }
+
   async function update(){
     if(updating)return;
     updating=true;
     try{
       const chip=ensureChip();if(!chip)return;
       const pending=await pendingCount(),online=navigator.onLine!==false;
+      updateCoachPanel(online,pending);
       let mode='online',label='Online',detail='Online and no offline changes are waiting to sync.';
       if(!online){
         mode='offline';label=pending?`Offline · ${pending} saved`:'Offline';detail=pending?`${pending} team update${pending===1?' is':'s are'} saved on this device and will sync after reconnecting.`:'Offline. Team APP remains available from this device where cached.';
@@ -52,7 +63,7 @@
 
   function start(){
     if(observer)return;
-    observer=new MutationObserver(()=>{if(!document.getElementById(ID))update();});
+    observer=new MutationObserver(()=>update());
     const app=document.getElementById('app');if(app)observer.observe(app,{childList:true,subtree:true});
     root.addEventListener('online',update);
     root.addEventListener('offline',update);
