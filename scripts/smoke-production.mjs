@@ -61,16 +61,31 @@ if (home) {
     else fail(`home is missing ${name}`);
   }
 
-  for (const needle of ['manifest.webmanifest', 'app.js', 'cloud-client.js']) {
+  for (const needle of [
+    'manifest.webmanifest',
+    'app.js',
+    'cloud-client.js',
+    'core/cloud-queue.js',
+    'core/connectivity-status.js',
+    'core/connectivity-status.css'
+  ]) {
     if (home.body.includes(needle)) pass(`home references ${needle}`);
     else fail(`home does not reference ${needle}`);
   }
 }
 
-const cloud = await get('/cloud-client.js', { expectType: 'javascript' });
-if (cloud) {
-  if (cloud.body.length > 5000) pass(`cloud-client.js looks like a production bundle (${cloud.body.length} bytes)`);
-  else fail(`cloud-client.js is unexpectedly small (${cloud.body.length} bytes)`);
+const publicAssets = [
+  ['/cloud-client.js', 'javascript'],
+  ['/core/cloud-queue.js', 'javascript'],
+  ['/core/connectivity-status.js', 'javascript'],
+  ['/core/connectivity-status.css', 'text/css']
+];
+for (const [path, type] of publicAssets) {
+  const asset = await get(path, { expectType: type });
+  if (path === '/cloud-client.js' && asset) {
+    if (asset.body.length > 5000) pass(`cloud-client.js looks like a production bundle (${asset.body.length} bytes)`);
+    else fail(`cloud-client.js is unexpectedly small (${asset.body.length} bytes)`);
+  }
 }
 
 const sw = await get('/sw.js', { expectType: 'javascript' });
@@ -78,6 +93,10 @@ if (sw) {
   const cacheControl = sw.response.headers.get('cache-control') || '';
   if (/max-age=0|no-cache|must-revalidate/i.test(cacheControl)) pass('service worker cache policy supports prompt updates');
   else fail(`service worker cache-control is unexpected: ${JSON.stringify(cacheControl)}`);
+  for (const needle of ['./core/cloud-queue.js', './core/connectivity-status.js', './core/connectivity-status.css']) {
+    if (sw.body.includes(needle)) pass(`service worker precaches ${needle}`);
+    else fail(`service worker does not precache ${needle}`);
+  }
 }
 
 const manifest = await get('/manifest.webmanifest');
@@ -103,4 +122,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('\nProduction smoke PASSED. Public assets and baseline security headers look healthy.');
+console.log('\nProduction smoke PASSED. Public assets, offline wiring, and baseline security headers look healthy.');
