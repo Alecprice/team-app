@@ -6,16 +6,53 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: team-app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: npm
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: npm test
-      - run: npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Node dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install browser-test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run full regression suite
+        run: npm test
+
+      - name: Build Cloudflare Pages output
+        run: npm run build
+
+      - name: Verify required production assets
+        run: |
+          test -s dist/index.html
+          test -s dist/cloud-client.js
+          test -s dist/sw.js
+          test -s dist/manifest.webmanifest
+          test -s dist/_headers
+          grep -q "Content-Security-Policy:" dist/_headers
+          grep -q '"display": "standalone"' dist/manifest.webmanifest
+
+      - name: Verify tracked sources stay clean
+        run: git diff --exit-code -- . ':!dist'
