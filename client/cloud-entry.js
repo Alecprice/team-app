@@ -7,7 +7,7 @@ const authClient=neon.auth;
 const coachRoles=new Set(['owner','admin','coach','assistant_coach','manager']);
 let runtime=null,session=null,me=null,hydrating=true,syncTimer=null,pollTimer=null,activeConversation=null;
 const revisions=new Map(),conflicts=new Map();
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const RPC_SPECS={
   app_me:['me',()=>({})],
   app_team_create:['team.create',a=>a.p_payload||{}],
@@ -72,7 +72,7 @@ async function api(url,options={}){
   if((m=path.match(/^\/api\/teams\/([^/]+)\/conversations$/)))return rpc('app_conversation_create',{p_team:m[1],p_kind:b.kind,p_name:b.name||null,p_member_user_ids:b.memberUserIds||[],p_visibility:b.visibility||'team'});
   if(path==='/api/conversations')return rpc('app_conversation_list',{p_team:u.searchParams.get('teamId')||null});
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/members$/)))return rpc('app_conversation_members',{p_conversation:m[1]});
-  if((m=path.match(/^\/api\/conversations\/([^/]+)\/key-envelopes$/)))return rpc('app_conversation_envelopes_put',{p_conversation:m[1],p_key_version:Number(b.keyVersion||1),p_envelopes:b.p_envelopes||b.envelopes||[]});
+  if((m=path.match(/^\/api\/conversations\/([^/]+)\/key-envelopes$/)))return rpc('app_conversation_envelopes_put',{p_conversation:m[1],p_key_version:Number(b.keyVersion||1),p_envelopes:b.envelopes||[]});
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/key-envelope$/)))return rpc('app_conversation_envelope_get',{p_conversation:m[1],p_key_version:u.searchParams.get('version')?Number(u.searchParams.get('version')):null});
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/messages$/))){return method==='POST'?rpc('app_message_send',{p_conversation:m[1],p_ciphertext:b.ciphertext,p_nonce:b.nonce,p_crypto_version:b.cryptoVersion,p_client_message_id:b.clientMessageId}):rpc('app_message_list',{p_conversation:m[1],p_after:u.searchParams.get('after')||null,p_after_id:u.searchParams.get('afterId')||null});}
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/read$/)))return rpc('app_message_read',{p_conversation:m[1]});
