@@ -63,8 +63,17 @@ for (const required of [
 assert(sourceHtml.indexOf('./core/cloud-queue.js') < sourceHtml.indexOf('./cloud-client.js'), 'offline queue loads before cloud client');
 assert(sourceHtml.indexOf('./app.js') < sourceHtml.indexOf('./core/connectivity-status.js'), 'connectivity enhancer loads after main app');
 
+assert(manifest.id === './', 'manifest has stable app id');
+assert(manifest.scope === './', 'manifest scope is explicit');
+assert(manifest.start_url === './', 'manifest start_url is canonical');
 assert(manifest.display === 'standalone', 'manifest uses standalone display mode');
-assert(Boolean(manifest.start_url), 'manifest has start_url');
+assert(manifest.lang === 'en-US', 'manifest language is explicit');
+const shortcutUrls=(manifest.shortcuts||[]).map(x=>x.url);
+assert(shortcutUrls.includes('./#schedule'), 'manifest exposes Schedule shortcut');
+assert(shortcutUrls.includes('./#lineup'), 'manifest exposes Lineups shortcut');
+for (const shortcut of manifest.shortcuts||[]) {
+  assert(Boolean(shortcut.name&&shortcut.short_name&&shortcut.description&&shortcut.url), `manifest shortcut is complete: ${shortcut.short_name||shortcut.name||'unnamed'}`);
+}
 for (const size of ['192x192', '512x512']) {
   const icon = manifest.icons?.find(item => item.sizes === size);
   assert(Boolean(icon), `manifest declares ${size} icon`);
@@ -129,4 +138,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('\nRelease verification PASSED. Build, lockfile, PWA/runtime wiring, Cloudflare configs, Worker scaffold, and baseline security contracts are aligned.');
+console.log('\nRelease verification PASSED. Build, lockfile, installed-PWA/runtime wiring, Cloudflare configs, Worker scaffold, and baseline security contracts are aligned.');
