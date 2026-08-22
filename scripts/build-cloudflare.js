@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dist=path.join(root,'dist');
 await fs.rm(dist,{recursive:true,force:true});await fs.mkdir(dist,{recursive:true});
-await build({entryPoints:[path.join(root,'client/cloud-entry.js')],bundle:true,minify:true,sourcemap:false,format:'iife',platform:'browser',target:['es2022'],outfile:path.join(dist,'cloud-client.js'),define:{'process.env.NODE_ENV':'"production"'}});
+await build({entryPoints:[path.join(root,'client/cloud-entry-hardened.js')],bundle:true,minify:true,sourcemap:false,format:'iife',platform:'browser',target:['es2022'],outfile:path.join(dist,'cloud-client.js'),define:{'process.env.NODE_ENV':'"production"'}});
 const files=['index.html','styles.css','sports.js','competition-profiles.js','app.js','sw.js','manifest.webmanifest','_headers'];
 for(const f of files)await fs.copyFile(path.join(root,f),path.join(dist,f));
 for(const dir of ['core','icons'])await fs.cp(path.join(root,dir),path.join(dist,dir),{recursive:true});
