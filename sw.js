@@ -1,5 +1,5 @@
 const CACHE='team-app-live-v1.10.0';
-const ASSETS=['./','./index.html','./styles.css','./sports.js','./competition-profiles.js','./core/file-store.js','./core/cloud-queue.js','./core/sport-runtime.js','./core/e2ee.js','./cloud-client.js','./app.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png'];
+const ASSETS=['./','./index.html','./styles.css','./sports.js','./competition-profiles.js','./core/file-store.js','./core/cloud-queue.js','./core/sport-runtime.js','./core/e2ee.js','./core/connectivity-status.css','./core/connectivity-status.js','./cloud-client.js','./app.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
