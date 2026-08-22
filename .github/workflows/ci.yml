@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: team-app-ci-${{ github.ref }}
@@ -23,6 +24,22 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
+
+      - name: Mark release gate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          node <<'NODE'
+          const {GH_TOKEN,REPOSITORY,COMMIT_SHA}=process.env;
+          const response=await fetch(`https://api.github.com/repos/${REPOSITORY}/statuses/${COMMIT_SHA}`,{
+            method:'POST',
+            headers:{Authorization:`Bearer ${GH_TOKEN}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'},
+            body:JSON.stringify({state:'pending',context:'team-app/release-gate',description:'V1.10 regression and release verification is running'})
+          });
+          if(!response.ok)throw new Error(`Could not publish pending status: ${response.status}`);
+          NODE
 
       - uses: actions/setup-python@v5
         with:
@@ -48,3 +65,23 @@ jobs:
 
       - name: Verify tracked sources stay clean
         run: git diff --exit-code -- . ':!dist'
+
+      - name: Publish release gate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          node <<'NODE'
+          const {GH_TOKEN,REPOSITORY,COMMIT_SHA,JOB_STATUS}=process.env;
+          const state=JOB_STATUS==='success'?'success':'failure';
+          const description=state==='success'?'V1.10 regression and release verification passed':'V1.10 regression or release verification failed';
+          const response=await fetch(`https://api.github.com/repos/${REPOSITORY}/statuses/${COMMIT_SHA}`,{
+            method:'POST',
+            headers:{Authorization:`Bearer ${GH_TOKEN}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'},
+            body:JSON.stringify({state,context:'team-app/release-gate',description})
+          });
+          if(!response.ok)throw new Error(`Could not publish final status: ${response.status}`);
+          NODE
