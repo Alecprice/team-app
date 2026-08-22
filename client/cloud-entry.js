@@ -7,7 +7,7 @@ const authClient=neon.auth;
 const coachRoles=new Set(['owner','admin','coach','assistant_coach','manager']);
 let runtime=null,session=null,me=null,hydrating=true,syncTimer=null,pollTimer=null,activeConversation=null;
 const revisions=new Map(),conflicts=new Map();
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const RPC_SPECS={
   app_me:['me',()=>({})],
   app_team_create:['team.create',a=>a.p_payload||{}],
@@ -72,7 +72,7 @@ async function api(url,options={}){
   if((m=path.match(/^\/api\/teams\/([^/]+)\/conversations$/)))return rpc('app_conversation_create',{p_team:m[1],p_kind:b.kind,p_name:b.name||null,p_member_user_ids:b.memberUserIds||[],p_visibility:b.visibility||'team'});
   if(path==='/api/conversations')return rpc('app_conversation_list',{p_team:u.searchParams.get('teamId')||null});
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/members$/)))return rpc('app_conversation_members',{p_conversation:m[1]});
-  if((m=path.match(/^\/api\/conversations\/([^/]+)\/key-envelopes$/)))return rpc('app_conversation_envelopes_put',{p_conversation:m[1],p_key_version:Number(b.keyVersion||1),p_envelopes:b.envelopes||[]});
+  if((m=path.match(/^\/api\/conversations\/([^/]+)\/key-envelopes$/)))return rpc('app_conversation_envelopes_put',{p_conversation:m[1],p_key_version:Number(b.keyVersion||1),p_envelopes:b.p_envelopes||b.envelopes||[]});
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/key-envelope$/)))return rpc('app_conversation_envelope_get',{p_conversation:m[1],p_key_version:u.searchParams.get('version')?Number(u.searchParams.get('version')):null});
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/messages$/))){return method==='POST'?rpc('app_message_send',{p_conversation:m[1],p_ciphertext:b.ciphertext,p_nonce:b.nonce,p_crypto_version:b.cryptoVersion,p_client_message_id:b.clientMessageId}):rpc('app_message_list',{p_conversation:m[1],p_after:u.searchParams.get('after')||null,p_after_id:u.searchParams.get('afterId')||null});}
   if((m=path.match(/^\/api\/conversations\/([^/]+)\/read$/)))return rpc('app_message_read',{p_conversation:m[1]});
@@ -92,7 +92,8 @@ function buttonBusy(btn,busy,label='Working…'){if(!btn)return;btn.disabled=bus
 function roleFor(remoteId){return me?.teams?.find(t=>t.id===remoteId)?.role||null;}
 function activePayload(){return runtime?.getActiveCloudPayload?.()||null;}
 function activeRemoteId(){return activePayload()?.teamRecord?.remoteId||null;}
-async function queuedRows(){try{return await window.TEAM_APP_CLOUD_QUEUE?.entries?.()||[];}catch{return [];}}
+async function allQueuedRows(){try{return await window.TEAM_APP_CLOUD_QUEUE?.entries?.()||[];}catch{return [];}}
+async function queuedRows(){const rows=await allQueuedRows(),ownerId=me?.user?.id||session?.user?.id||null;if(!ownerId)return rows.filter(([,p])=>!p?.ownerUserId);return rows.filter(([,p])=>!p?.ownerUserId||p.ownerUserId===ownerId);}
 const syncResult=(status,extra={})=>({status,...extra});
 function syncResultMessage(result){
   if(result?.status==='synced'||result?.status==='created')return 'Sync complete.';
@@ -146,19 +147,25 @@ async function syncActive(force=false){
 }
 async function queuePayload(p){
   const remoteId=p?.teamRecord?.remoteId;if(!remoteId)return false;
-  const queue=window.TEAM_APP_CLOUD_QUEUE;if(!queue?.put){runtime?.toast?.('Offline cloud queue is unavailable. Your coaching changes remain local only on this device.');return false;}
-  const existing=(await queuedRows()).find(([id])=>id===remoteId)?.[1],existingBase=Number(existing?.baseRevision),currentBase=Number(revisions.get(remoteId));
+  const queue=window.TEAM_APP_CLOUD_QUEUE,ownerUserId=me?.user?.id||session?.user?.id||null;
+  if(!queue?.put){runtime?.toast?.('Offline cloud queue is unavailable. Your coaching changes remain local only on this device.');return false;}
+  if(!ownerUserId){runtime?.toast?.('Sign in again before adding more changes to the cloud sync queue. Your current coaching changes remain local on this device.');return false;}
+  const existingAny=(await allQueuedRows()).find(([id])=>id===remoteId)?.[1];
+  if(existingAny?.ownerUserId&&existingAny.ownerUserId!==ownerUserId){runtime?.toast?.('Another adult account has unsynced changes for this team on this device. Sign back into that account to finish syncing before replacing them.');return false;}
+  const existingBase=Number(existingAny?.baseRevision),currentBase=Number(revisions.get(remoteId));
   const baseRevision=Number.isFinite(existingBase)?existingBase:(Number.isFinite(currentBase)?currentBase:0);
-  const ok=await queue.put(remoteId,{baseRevision,teamRecord:p.teamRecord,context:p.context});
+  const ok=await queue.put(remoteId,{ownerUserId,baseRevision,teamRecord:p.teamRecord,context:p.context});
   if(ok===false)runtime?.toast?.('Your coaching changes remain saved locally, but this team could not be added to the cloud sync queue. Reconnect before clearing site data or changing devices.');
   return ok===true;
 }
 async function removeQueued(id){await window.TEAM_APP_CLOUD_QUEUE?.remove?.(id);}
 async function flushQueue(){
   const outcomes=[];if(!navigator.onLine)return outcomes;
-  const rows=await queuedRows();
+  const rows=await queuedRows(),ownerUserId=me?.user?.id||session?.user?.id||null;
   for(const [id,p] of rows){
     if(conflicts.has(id)){outcomes.push(syncResult('conflict',{remoteId:id,conflict:conflicts.get(id)}));continue;}
+    if(!p?.ownerUserId){const conflict={revision:Number(revisions.get(id)||0),reason:'queued_owner_unknown'};conflicts.set(id,conflict);runtime?.toast?.('Saved offline changes were created by an older queue format and need review before cloud sync. Open Account to choose which copy to keep.');outcomes.push(syncResult('conflict',{remoteId:id,conflict}));continue;}
+    if(p.ownerUserId!==ownerUserId)continue;
     const baseRevision=Number(p?.baseRevision);
     if(!Number.isFinite(baseRevision)){
       const conflict={revision:Number(revisions.get(id)||0),reason:'queued_revision_missing'};conflicts.set(id,conflict);runtime?.toast?.('Saved offline changes need review before cloud sync because they were created by an older queue format. Open Account to choose which copy to keep.');outcomes.push(syncResult('conflict',{remoteId:id,conflict}));continue;
