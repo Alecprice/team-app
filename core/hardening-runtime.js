@@ -29,8 +29,18 @@
   root.addEventListener('teamapp:storage-failure',()=>storageBanner());
 
   function cloudPresent(){return Boolean(root.TeamAppCloud);}
+  function migrateUnclaimedState(userId){
+    if(!rawStorage)return;
+    for(const key of STATE_KEYS){
+      const source=`team-app-unclaimed:${key}`,target=`team-app-account:${userId}:${key}`;
+      const existing=rawGet(target),unclaimed=rawGet(source);
+      if(!existing&&unclaimed)rawSet(target,unclaimed);
+    }
+  }
   function reconcileAccountNamespace(){
-    if(DEMO||!cloudPresent())return;const userId=root.TeamAppCloud.session?.user?.id||null;if(!userId)return;const marker=rawGet(ACCOUNT_MARKER);if(marker===String(userId))return;if(!rawSet(ACCOUNT_MARKER,userId))return;channel?.postMessage({type:'account-change',account:String(userId),at:Date.now()});
+    if(DEMO||!cloudPresent())return;const userId=root.TeamAppCloud.session?.user?.id||null;if(!userId)return;const marker=rawGet(ACCOUNT_MARKER);if(marker===String(userId))return;
+    if(!marker)migrateUnclaimedState(String(userId));
+    if(!rawSet(ACCOUNT_MARKER,userId))return;channel?.postMessage({type:'account-change',account:String(userId),at:Date.now()});
     const key='team-app-account-reload';try{if(root.sessionStorage.getItem(key)!==String(userId)){root.sessionStorage.setItem(key,String(userId));reloadForAccount=true;root.location.reload();}}catch{}
   }
   function updateAuthLock(){
