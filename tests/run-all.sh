@@ -35,6 +35,7 @@ node --check competition-profiles.js
 node --check core/file-store.js
 node --check core/cloud-queue.js
 node --check core/connectivity-status.js
+node --check core/hardening-runtime.js
 node --check core/sport-runtime.js
 node --check app.js
 node --check scripts/generate-sport-schema.js
@@ -65,6 +66,7 @@ run_batch 'Responsive + security + stress browser contracts' \
   'Layout chaos stress' tests/e2e_layout_chaos.py \
   'Six-sport responsive smoke' tests/e2e_smoke.py \
   'Connectivity and offline status' tests/e2e_connectivity.py \
+  'Runtime hardening' tests/e2e_runtime_hardening.py \
   'Hostile input / XSS' tests/e2e_xss.py \
   'Mobile accessibility labels' tests/e2e_accessibility.py \
   'Heavy mobile data stress' tests/e2e_stress.py \
