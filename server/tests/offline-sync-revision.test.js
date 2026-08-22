@@ -8,9 +8,10 @@ const here=path.dirname(fileURLToPath(import.meta.url));
 const root=path.resolve(here,'../..');
 const source=fs.readFileSync(path.join(root,'client/cloud-entry.js'),'utf8');
 
-test('offline queue preserves the optimistic base revision',()=>{
-  assert.match(source,/queue\.put\(remoteId,\{baseRevision,teamRecord:p\.teamRecord,context:p\.context\}\)/);
+test('offline queue preserves account ownership and optimistic base revision',()=>{
+  assert.match(source,/queue\.put\(remoteId,\{ownerUserId,baseRevision,teamRecord:p\.teamRecord,context:p\.context\}\)/);
   assert.match(source,/revision:baseRevision,teamRecord:p\.teamRecord,context:p\.context/);
+  assert.match(source,/existingAny\?\.ownerUserId&&existingAny\.ownerUserId!==ownerUserId/);
   assert.doesNotMatch(source,/revision:revisions\.get\(id\)\|\|0,teamRecord:p\.teamRecord,context:p\.context/);
 });
 
