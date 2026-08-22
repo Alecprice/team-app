@@ -8,6 +8,11 @@ on:
         required: true
         default: https://team-app.pages.dev
         type: string
+      expected_commit:
+        description: Expected deployed Git SHA (defaults to this workflow commit)
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -17,11 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
 
       - name: Verify public production deployment
+        env:
+          TEAM_APP_EXPECT_COMMIT: ${{ inputs.expected_commit || github.sha }}
         run: node scripts/smoke-production.mjs "${{ inputs.base_url }}"
