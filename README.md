@@ -1,184 +1,158 @@
-# Team APP — Secure Multi-Sport Service V1.8
+# Team APP — Multi-Sport Coach V1.10
 
-> Deployment status: NOT CURRENTLY DEPLOYED. This package is the Cloudflare Pages/Workers + Neon V1.10 hardening baseline.
+> Release status: **staging candidate, not approved for real-family production use yet.** See `RELEASE_READINESS.md` for the remaining live-device gates.
 
-Team APP is a mobile-first team-management, coaching, communication, scheduling, weather and learning PWA. Baseball remains the deepest coaching template, while the shared architecture supports Baseball, Softball, Soccer, Basketball, Football and Volleyball.
+Team APP is a mobile-first team-management and coaching PWA designed for coaches, staff, guardians, and youth-sports operations. Baseball remains the deepest coaching template, while the shared architecture supports Baseball, Softball, Soccer, Basketball, Football, and Volleyball.
 
-V1.8 moves the project from a single-device coaching prototype into a deployable team service while preserving offline-first coaching tools.
+V1.10 focuses on release hardening: safer multi-device sync, stricter Neon RPC permissions, improved guardian/form/document isolation, stronger PWA behavior, browser regression coverage, reproducible dependency installs, and Cloudflare Pages release verification.
 
-## Coach product
+## Product capabilities
 
-A coach can create multiple isolated teams and configure each team independently:
+A coach can maintain multiple isolated teams and configure each team independently:
 
-- sport
-- team name / short name / season
-- age group and division
-- governing league / competition profile
-- official rule source
-- structured local-rule overrides
-- home park/facility and weather coordinates
-- team colors
-- uploaded team/mascot icon
-- coaching staff and roles
-- roster
-- team documents
-- formations / lineups / rotations
-- practice plan
-- schedule and weather
-- Game Day
-- player development
-- learning resources
+- sport, season, age group, division, and competition profile
+- official rule source plus structured local-rule overrides
+- team branding, home location, weather coordinates, and staff
+- roster and player development
+- formations, lineups, rotations, and multi-unit football assignments
+- practice plans and learning resources
+- schedule, weather, availability, and Game Day
+- documents and acknowledgments
+- forms, assignments, signatures, and submission tracking
+- team/coach/event/direct adult messaging
+- per-team notification preferences
 
-The competition registry currently contains **183 age/division profiles across six sports**. Official source metadata is kept separate from local league overrides so Team APP does not pretend one generic rulebook applies everywhere.
+The competition registry contains **183 age/division profiles across six sports**. Official source metadata is kept separate from local overrides so the app does not pretend one generic rulebook applies everywhere.
 
-## Adult accounts and team access
+## Adult accounts and guardian access
 
-Production service source now includes:
+The Cloudflare/Neon client supports adult account workflows through Neon Auth and the Neon Data API.
 
-- adult coach/staff/guardian account model
-- email/password authentication
-- magic-link authentication
-- passkey-capable Better Auth adapter
-- coach invitations
-- guardian invitations linked to a specific roster athlete
-- one-use / expiring guardian join codes
-- automatic guardian-athlete relationship creation
-- role-based API authorization
-- coach/admin/assistant/manager/guardian/member/read-only roles
+- coach/staff/guardian accounts
+- team roles and team-scoped authorization
+- coach and guardian invitations
+- expiring join codes
+- guardian-athlete linkage
 - guardian-safe team-state projection
+- team-scoped forms, documents, availability, and conversations
 
 Child athletes do not need accounts.
 
-## Cloud/offline team sync
+## Offline-first sync
 
-The browser remains local-first for field reliability. Published teams synchronize to PostgreSQL using optimistic revisions.
+The coaching workspace remains local-first for field reliability.
 
-- offline changes queue on the device
-- sync resumes when connectivity returns
+- offline edits are retained on the device
+- cloud writes use optimistic revisions
+- reconnect replays queued changes
 - conflicts are surfaced instead of silently overwriting another device
-- each team has isolated roster/schedule/lineup/practice/development/Game Day state
-- coach-private notes and development data are split from weather/schedule-readable state and encrypted separately at rest
+- team contexts remain isolated
+- V1.10 uses an atomic database revision claim to prevent two-device lost updates
 
-## Team documents
-
-- PDF, PNG/JPEG/WebP, TXT/CSV and common Office document formats
-- configurable coach/team/guardian/private visibility
-- signed object-storage uploads/downloads in production
-- upload completion state prevents half-uploaded documents from appearing
-- SHA-256 metadata
-- document acknowledgments
-- forced attachment downloads
-- HTML/SVG/active web content rejected from the document channel
-- private documents are uploader-private
-
-## Forms
-
-- reusable form templates
-- coach assignment to adult team members
-- due dates
-- submission tracking
-- required field validation
-- typed/drawn signature model
-- explicit signature consent text
-- drawn signature payload encryption at rest
-- assignment ownership enforcement
-- guardian-child relationship enforcement for athlete-linked forms
+The remaining release gate is to prove the complete offline/reconnect collision flow against the actual Cloudflare Pages deployment with two real browser sessions.
 
 ## Secure messaging
 
 Private message bodies are encrypted in the browser before upload.
 
-- team, coaches, event and direct adult conversations
 - per-device ECDH P-256 identity keys
 - HKDF-SHA256 conversation-key wrapping
 - AES-GCM message encryption
-- ciphertext + nonce stored on the server
 - per-recipient key envelopes
-- generic push notification text that does not expose private message content
-- read-state tracking
+- versioned historical conversation keys
+- sender-key snapshots for key-rotation safety
 
-## Schedule, weather and availability
+Lost-device recovery for historical encrypted conversations remains a product/security decision before broad launch.
 
-- outdoor/indoor events
-- NWS hourly forecasts
-- official NWS alert monitoring
-- automatic weather-change watch for upcoming outdoor events
-- guardian **Yes / Maybe / No** response for specifically linked athletes
-- coach full-roster availability view
-- event availability changes are audited
+## Team documents and forms
 
-## Age-specific baseball guidance
+Documents support visibility rules, acknowledgments, active-content rejection, and bounded Data API staging. Forms support reusable templates, assignments, required-field validation, signatures, guardian-child ownership enforcement, and submission tracking.
 
-For teams configured as Little League Baseball, player profiles can store **League Age** without needing a DOB. Game Day uses that age to display current Little League daily pitch maximums and rest bands, plus eligibility warnings based on retained Team APP game history. The counter is not silently locked because official batter-threshold exceptions and local/official review still matter.
+Large photo/video document storage should not launch on database blobs; the object-storage path still needs live scale testing.
 
-## Push notifications
+## Little League Baseball guidance
 
-Per-team notification preferences are available for:
+For Little League Baseball profiles, player records can store **League Age** without requiring DOB storage. Game Day can surface pitch/rest guidance and eligibility warnings from retained Team APP game history. Coaches remain responsible for confirming current official/local rules and exceptions.
 
-- messages
-- schedule changes
-- weather alerts
-- documents
-- forms
+## Cloud architecture
 
-The PWA service worker handles Web Push and notification navigation.
+### Frontend
 
-## Run the offline coaching prototype
+- Cloudflare Pages project: `team-app`
+- production build command: `npm run build`
+- output directory: `dist`
+- static PWA with service worker and install manifest
 
-The existing coaching UI can still be served without the Node service:
+### Data/auth
 
-```bash
-python3 -m http.server 8080
-```
+- Neon project: `team-app`
+- Neon Auth for adult sessions
+- Neon Data API for browser-to-database RPC access
+- one client-executable application dispatcher: `app_api(text,jsonb)`
+- no direct authenticated/anonymous CRUD grants on public application tables
 
-Open `http://localhost:8080`.
+### Worker jobs
 
-Cloud/account features require the Node production service and a built `cloud-client.js`.
+`worker/` contains the `team-app-jobs` Cloudflare Worker scaffold for scheduled/background notification work. Closed-app push and automatic invitation email are not yet production-complete.
 
-## Run the full service
+## Install dependencies
+
+Use the committed lockfile:
 
 ```bash
-npm install
-npm run build
-cp .env.example .env
-# configure environment
-npm run db:bootstrap      # fresh database only
-npm run db:seed          # sport + 183 competition profiles
-npm run auth:migrate     # self-hosted Better Auth schema
-npm start
+npm ci
 ```
 
-For an existing Team APP database use `npm run db:service` rather than the fresh bootstrap.
+Direct release dependencies are pinned. Browser regression tooling is pinned separately in `requirements-dev.txt`.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md).
+## Run locally
 
-## Neon status for this project
+Build and serve the Cloudflare-style static output:
 
-A Neon project has been provisioned for Team APP, the V1.8 service/core tables have been initialized, and Neon managed Auth has also been provisioned as an optional managed identity path. This source build intentionally defaults to the **self-hosted Better Auth adapter** because it currently includes the passkey plugin. Do not run two identity systems as authoritative providers in one deployment.
+```bash
+npm ci
+npm run dev
+```
 
-## Test gate
+For the simplest offline coaching-only preview, the source root can also be served by a basic static HTTP server, but production cloud behavior must be tested from the built `dist` output.
+
+## Regression gate
+
+Install browser-test tooling once:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+python3 -m playwright install chromium
+```
+
+Then run:
 
 ```bash
 npm test
+npm run verify:release
 ```
 
-The current V1.8 regression gate covers:
+The V1.10 regression suite covers state migration/fuzzing, multi-team isolation, Coach Center, sport scoring, formations/layouts, responsive/mobile behavior, accessibility, hostile input/XSS handling, heavy/extreme datasets, and cloud/service security contracts.
 
-- 6 sport adapters
-- 183 competition profiles
-- 61 schema-table contract
-- saved-state V2 → V8 migration
-- malformed/corrupted save recovery
-- multi-team isolation
-- Coach Center workflow
-- football unit isolation
-- sport scoring models
-- formation/layout behavior
-- 66 layout combinations on 320×568
-- all 6 sports on 320px, 390px, landscape and desktop
-- 80-player / 24-period / 30-event / 40-activity mobile stress dataset
-- cloud/service security contracts
+`npm run verify:release` additionally checks that the lockfile, service-worker cache version, PWA precache assets, manifest icons, Cloudflare output settings, production cloud bundle, and baseline security headers are aligned.
 
-## Build-environment note
+## Production smoke
 
-The source package contains the complete cloud client source at `client/cloud-entry.js` and an esbuild build step. The npm registry was unreachable from the artifact-generation environment, so the checked-in `cloud-client.js` remains a development fallback. A real deployment must run `npm install && npm run build`; do not treat the fallback file as a production cloud bundle.
+Once the Pages deployment is reachable:
+
+```bash
+npm run smoke:prod -- https://team-app.pages.dev
+```
+
+There is also a phone-friendly manual GitHub Action under **Actions -> Production Smoke**. It verifies the public root page, `cloud-client.js`, `sw.js`, manifest, PWA contract, and baseline response security headers.
+
+Passing the public smoke test does **not** replace the real-account/device staging gates in `RELEASE_READINESS.md`.
+
+## Key project documents
+
+- `RELEASE_READINESS.md` — launch gates and current evidence
+- `HARDENING_AUDIT.md` — significant defects found/fixed in V1.10
+- `TESTING.md` — local, CI, and production-smoke procedures
+- `CLOUDFLARE_DEPLOYMENT.md` — Pages/Worker deployment shape
+- `ROADMAP.md` — next normalization, coaching-depth, collaboration, and mobile work
+- `SECURITY.md` — security model and operational expectations
