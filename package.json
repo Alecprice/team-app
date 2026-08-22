@@ -15,7 +15,7 @@
     "test:service": "node --test server/tests/*.test.js",
     "build:cloudflare": "node scripts/build-cloudflare.js",
     "verify:release": "npm run build && node scripts/verify-release.mjs",
-    "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir /tmp/team-app-worker-dry-run",
+    "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir .wrangler-dry-run",
     "smoke:prod": "node scripts/smoke-production.mjs"
   },
   "dependencies": {
