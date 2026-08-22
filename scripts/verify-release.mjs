@@ -21,8 +21,9 @@ const lock = JSON.parse(read('package-lock.json'));
 const sw = read('sw.js');
 const headers = read('_headers');
 const manifest = JSON.parse(read('manifest.webmanifest'));
-const wranglerSource = read('wrangler.jsonc');
-const wrangler = JSON.parse(wranglerSource);
+const wrangler = JSON.parse(read('wrangler.jsonc'));
+const workerWrangler = JSON.parse(read('worker/wrangler.jsonc'));
+const workerSource = read('worker/src/index.js');
 const sourceHtml = read('index.html');
 const distHtml = distExists('index.html') ? fs.readFileSync(path.join(dist, 'index.html'), 'utf8') : '';
 
@@ -70,9 +71,18 @@ for (const size of ['192x192', '512x512']) {
   if (icon?.src) assert(distExists(icon.src.replace(/^\.\//, '')), `dist contains ${size} icon`);
 }
 
-assert(wrangler.name === 'team-app', 'Wrangler project name is team-app');
+assert(wrangler.name === 'team-app', 'Wrangler Pages project name is team-app');
 assert(wrangler.pages_build_output_dir === './dist', 'Wrangler Pages output is ./dist');
-assert(/^\d{4}-\d{2}-\d{2}$/.test(String(wrangler.compatibility_date || '')), 'Wrangler compatibility date is explicit');
+assert(/^\d{4}-\d{2}-\d{2}$/.test(String(wrangler.compatibility_date || '')), 'Pages Wrangler compatibility date is explicit');
+
+assert(workerWrangler.name === 'team-app-jobs', 'scheduled Worker name is team-app-jobs');
+assert(workerWrangler.main === 'src/index.js', 'scheduled Worker entry point is explicit');
+assert(/^\d{4}-\d{2}-\d{2}$/.test(String(workerWrangler.compatibility_date || '')), 'Worker compatibility date is explicit');
+assert(workerWrangler.vars?.APP_ORIGIN === 'https://team-app.pages.dev', 'Worker app origin matches expected canonical Pages origin');
+assert(Array.isArray(workerWrangler.triggers?.crons) && workerWrangler.triggers.crons.length === 1, 'scheduled Worker has exactly one cron trigger');
+assert(workerSource.includes(`const VERSION='${pkg.version}'`), `Worker health version matches V${pkg.version}`);
+assert(workerSource.includes("mode:'scaffold'"), 'Worker health explicitly reports scaffold mode');
+assert(workerSource.includes('deliveryEnabled:false'), 'Worker health explicitly reports delivery disabled');
 
 for (const file of [
   'index.html',
@@ -119,4 +129,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('\nRelease verification PASSED. Build, lockfile, PWA/runtime wiring, Cloudflare config, and baseline security contracts are aligned.');
+console.log('\nRelease verification PASSED. Build, lockfile, PWA/runtime wiring, Cloudflare configs, Worker scaffold, and baseline security contracts are aligned.');
