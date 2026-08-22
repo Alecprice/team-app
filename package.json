@@ -13,7 +13,8 @@
     "build:client": "node server/scripts/build-client.js",
     "test": "bash tests/run-all.sh && node --test server/tests/*.test.js",
     "test:service": "node --test server/tests/*.test.js",
-    "build:cloudflare": "node scripts/build-cloudflare.js"
+    "build:cloudflare": "node scripts/build-cloudflare.js",
+    "smoke:prod": "node scripts/smoke-production.mjs"
   },
   "dependencies": {
     "@neondatabase/neon-js": "0.7.0-beta"
