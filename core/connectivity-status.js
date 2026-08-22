@@ -2,10 +2,14 @@
   'use strict';
 
   const ID='teamConnectivityStatus';
-  let observer=null,timer=null,updating=false;
+  let observer=null,timer=null,updating=false,rerun=false;
 
-  async function pendingCount(){
-    try{return (await root.TEAM_APP_CLOUD_QUEUE?.entries?.()||[]).length;}catch{return 0;}
+  async function queueState(){
+    try{
+      const rows=await root.TEAM_APP_CLOUD_QUEUE?.entries?.()||[];
+      const activeId=root.TeamAppRuntime?.getActiveCloudPayload?.()?.teamRecord?.remoteId||null;
+      return {total:rows.length,active:activeId?rows.some(([id])=>id===activeId):false};
+    }catch{return {total:0,active:false};}
   }
 
   function ensureChip(){
@@ -25,39 +29,42 @@
     return chip;
   }
 
-  function updateCoachPanel(online,pending){
+  function updateCoachPanel(online,activePending){
     const sub=document.querySelector('.cloud-coach-card .card-sub');
     if(!sub)return;
     const match=sub.textContent.match(/^(?:Synced|Sync pending|Offline changes saved) · (.+)$/);
     if(!match)return;
-    const role=match[1],prefix=!online&&pending?'Offline changes saved':pending?'Sync pending':'Synced';
+    const role=match[1];
+    const prefix=activePending?(!online?'Offline changes saved':'Sync pending'):'Synced';
     const next=`${prefix} · ${role}`;
     if(sub.textContent!==next)sub.textContent=next;
   }
 
   async function update(){
-    if(updating)return;
+    if(updating){rerun=true;return;}
     updating=true;
     try{
       const chip=ensureChip();if(!chip)return;
-      const pending=await pendingCount(),online=navigator.onLine!==false;
-      updateCoachPanel(online,pending);
+      const queue=await queueState(),online=navigator.onLine!==false;
+      updateCoachPanel(online,queue.active);
       let mode='online',label='Online',detail='Online and no offline changes are waiting to sync.';
       if(!online){
-        mode='offline';label=pending?`Offline · ${pending} saved`:'Offline';detail=pending?`${pending} team update${pending===1?' is':'s are'} saved on this device and will sync after reconnecting.`:'Offline. Team APP remains available from this device where cached.';
-      }else if(pending){
-        mode='pending';label=`Sync pending · ${pending}`;detail=`${pending} saved team update${pending===1?' is':'s are'} waiting for cloud synchronization.`;
+        mode='offline';label=queue.total?`Offline · ${queue.total} saved`:'Offline';detail=queue.total?`${queue.total} team update${queue.total===1?' is':'s are'} saved on this device and will sync after reconnecting.`:'Offline. Team APP remains available from this device where cached.';
+      }else if(queue.total){
+        mode='pending';label=`Sync pending · ${queue.total}`;detail=`${queue.total} saved team update${queue.total===1?' is':'s are'} waiting for cloud synchronization.`;
       }
       const labelEl=chip.querySelector('.connectivity-label');
       const changed=chip.dataset.state!==mode||labelEl?.textContent!==label||chip.getAttribute('aria-label')!==detail;
-      if(!changed)return;
-      chip.dataset.state=mode;
-      if(labelEl)labelEl.textContent=label;
-      chip.setAttribute('aria-label',detail);
-      chip.title=detail;
+      if(changed){
+        chip.dataset.state=mode;
+        if(labelEl)labelEl.textContent=label;
+        chip.setAttribute('aria-label',detail);
+        chip.title=detail;
+      }
     }finally{
       updating=false;
-      if(!document.getElementById(ID))root.setTimeout(update,0);
+      if(rerun){rerun=false;root.setTimeout(update,0);}
+      else if(!document.getElementById(ID))root.setTimeout(update,0);
     }
   }
 
@@ -67,6 +74,7 @@
     const app=document.getElementById('app');if(app)observer.observe(app,{childList:true,subtree:true});
     root.addEventListener('online',update);
     root.addEventListener('offline',update);
+    root.addEventListener('teamapp:queue-change',update);
     timer=root.setInterval(update,5000);
     update();
   }
