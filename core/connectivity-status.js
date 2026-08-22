@@ -2,7 +2,7 @@
   'use strict';
 
   const ID='teamConnectivityStatus';
-  let observer=null,timer=null,updating=false,rerun=false;
+  let observer=null,timer=null,updating=false,rerun=false,retryTimer=null;
 
   async function queueState(){
     try{
@@ -40,11 +40,16 @@
     if(sub.textContent!==next)sub.textContent=next;
   }
 
+  function scheduleRetry(){
+    if(retryTimer)return;
+    retryTimer=root.setTimeout(()=>{retryTimer=null;update();},250);
+  }
+
   async function update(){
     if(updating){rerun=true;return;}
     updating=true;
     try{
-      const chip=ensureChip();if(!chip)return;
+      const chip=ensureChip();if(!chip){scheduleRetry();return;}
       const queue=await queueState(),online=navigator.onLine!==false;
       updateCoachPanel(online,queue.active);
       let mode='online',label='Online',detail='Online and no offline changes are waiting to sync.';
@@ -63,19 +68,24 @@
       }
     }finally{
       updating=false;
-      if(rerun){rerun=false;root.setTimeout(update,0);}
-      else if(!document.getElementById(ID))root.setTimeout(update,0);
+      if(rerun){rerun=false;scheduleRetry();}
     }
   }
 
   function start(){
     if(observer)return;
-    observer=new MutationObserver(()=>update());
-    const app=document.getElementById('app');if(app)observer.observe(app,{childList:true,subtree:true});
+    const app=document.getElementById('app');
+    if(app){
+      observer=new MutationObserver(records=>{
+        if(records.some(r=>[...r.addedNodes,...r.removedNodes].some(n=>n.nodeType===1&&(n.matches?.('.topbar,.topbar-inner')||n.querySelector?.('.topbar,.topbar-inner')))))update();
+      });
+      observer.observe(app,{childList:true,subtree:true});
+    }
     root.addEventListener('online',update);
     root.addEventListener('offline',update);
     root.addEventListener('teamapp:queue-change',update);
-    timer=root.setInterval(update,5000);
+    root.addEventListener('teamapp:cloud-state-change',update);
+    timer=root.setInterval(update,15000);
     update();
   }
 
