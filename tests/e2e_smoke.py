@@ -8,9 +8,10 @@ SPORTS=['baseball','softball','soccer','basketball','football','volleyball']
 def document_html():
     css=(ROOT/'styles.css').read_text()
     sports=(ROOT/'sports.js').read_text()
+    content=(ROOT/'sport-content.js').read_text()
     core=(ROOT/'core'/'sport-runtime.js').read_text()
     app=(ROOT/'app.js').read_text()
-    return f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>{css}</style></head><body><div id="app"></div><script>window.__TEAM_APP_ENABLE_TEST_HOOKS__=true;</script><script>{sports}</script><script>{core}</script><script>{app}</script></body></html>'''
+    return f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>{css}</style></head><body><div id="app"></div><script>window.__TEAM_APP_ENABLE_TEST_HOOKS__=true;</script><script>{sports}</script><script>{content}</script><script>{core}</script><script>{app}</script></body></html>'''
 
 def no_horizontal_overflow(page, label):
     vals=page.evaluate("({sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth,bw:document.body.scrollWidth})")
@@ -60,10 +61,24 @@ def run_viewport(browser, viewport, label):
             page.locator('[data-lineup-unit="special"]').click(); assert page.locator('.position-slot').count()==11
             page.locator('[data-lineup-unit="offense"]').click(); assert page.locator('.position-slot').count()==11
         no_horizontal_overflow(page,f'{label}/{sport}/lineup')
+
+        # Every sport must expose the same usable Learn + Practice experience, not placeholders.
         click_nav(page,'learn')
-        assert page.locator('.learn-card').count()==registry[sport]['positions'], f'{label}/{sport}: learning position mismatch'
+        expected_positions=registry[sport]['positions']
+        assert page.locator('.learn-card').count()==expected_positions, f'{label}/{sport}: learning position mismatch'
+        assert page.locator('.learn-card:not([disabled])').count()==expected_positions, f'{label}/{sport}: disabled or missing position lessons'
+        page.locator('.learn-card:not([disabled])').first.click()
+        assert page.locator('.lesson-body').count()==1, f'{label}/{sport}: lesson modal did not open'
+        page.locator('#cancelModal').click()
         no_horizontal_overflow(page,f'{label}/{sport}/learn')
-        click_nav(page,'practice'); no_horizontal_overflow(page,f'{label}/{sport}/practice')
+
+        click_nav(page,'practice')
+        assert page.locator('.drill-card').count()>=6, f'{label}/{sport}: drill library too small'
+        page.locator('.drill-card [data-drill-detail]').first.click()
+        assert page.locator('.lesson-body').count()==1, f'{label}/{sport}: drill detail did not open'
+        page.locator('#cancelModal').click()
+        no_horizontal_overflow(page,f'{label}/{sport}/practice')
+
         page.locator('#gameDayBtn').click(); page.locator('[data-open-game]').first.click()
         assert page.locator('.game-pitch-card').count()==(1 if meta['pitchTracking'] else 0), f'{label}/{sport}: pitch feature gating failed'
         if sport=='football':
