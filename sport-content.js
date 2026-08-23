@@ -4,8 +4,12 @@
   }else{
     root.TEAM_APP_SPORTS=factory(root.TEAM_APP_SPORTS||{});
   }
-})(typeof globalThis!=='undefined'?globalThis:this,function(registry){
+})(typeof globalThis!=='undefined'?globalThis:this,function(sourceRegistry){
   'use strict';
+
+  // sports.js validates and freezes its adapters. Build a new top-level registry so
+  // reviewed coaching content can be layered on without weakening immutability.
+  const registry=Object.fromEntries(Object.entries(sourceRegistry||{}).map(([key,sport])=>[key,{...sport}]));
 
   const lesson=(title,where,responsibilities,skills,tip)=>({title,where,responsibilities,skills,tip});
   const drill=(id,title,minutes,category,focus,equipment,steps)=>({id,title,minutes,category,focus,equipment,steps});
