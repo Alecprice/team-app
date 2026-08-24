@@ -69,6 +69,23 @@ For Apple/Facebook, the future options are:
 1. Neon adds those providers to Managed Auth; enable them there and then turn on the Team APP feature flag.
 2. Run a self-managed Better Auth service on Cloudflare Workers backed by Neon, with Apple/Facebook configured server-side. This is a deliberate auth architecture migration and must be tested on RC before replacing Managed Auth.
 
+## Current RC Auth configuration observed
+
+The release-candidate database currently reports:
+
+- Google OAuth: **enabled**, using Neon shared credentials.
+- Trusted origin: `https://team-app-6mh.pages.dev`.
+- Email/password: enabled.
+- Require email verification: **false**.
+- Send verification email on signup/sign-in: **false**.
+- Allow localhost: **true**.
+- Magic Link: disabled.
+- Organization plugin: enabled.
+
+Therefore, do **not** create a new Google OAuth client just to start the first RC test. First enable the Team APP build flag and test the existing Neon shared Google provider. Create custom Google credentials later if you want your own branded OAuth consent/project or if the shared provider does not meet production requirements.
+
+Before production, use the Neon Auth console to require email verification, enable verification delivery, set the actual canonical Team APP HTTPS origin, and remove localhost if production does not need it.
+
 ## Google — recommended first provider
 
 Provider console:
@@ -79,7 +96,7 @@ Steps:
 
 1. Open Google Cloud Console.
 2. Create or select a Team APP Google Cloud project.
-3. Open **Google Auth Platform / OAuth consent screen** and configure the app name, support email, audience, and contact details.
+3. **For custom/branded Google credentials only:** open **Google Auth Platform / OAuth consent screen** and configure the app name, support email, audience, and contact details. The RC already has Neon shared Google OAuth available.
 4. Open **APIs & Services → Credentials**.
 5. Create **OAuth client ID** → **Web application**.
 6. Add the Neon Auth callback URL as an Authorized redirect URI:
