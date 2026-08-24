@@ -12,7 +12,7 @@ test('V1.10.1 database hardening migration preserves one client RPC and adds lif
     "jsonb_set(v,'{documents}','[]'::jsonb,true)",'trg_key_envelope_immutable',
     "p_action='member.remove'","p_action='member.role.update'","p_action='team.owner.transfer'",
     "p_action='invitation.revoke'","p_action='join.revoke'",'request_payload_too_large',
-    'app_validate_team_record','idx_messages_conversation_cursor',
+    'app_validate_team_record','idx_messages_conversation_cursor','access_expiration_required','join_code_uses_out_of_range',
     'alter default privileges in schema public revoke execute on functions from public'
   ]) assert.ok(sql.includes(token),`missing hardening contract: ${token}`);
   assert.match(sql,/revoke all on function public\.app_api_v1_10_core\(text,jsonb\) from authenticated/i);
@@ -39,6 +39,25 @@ test('cloud admin hardening uses the documented recovery adapter and access life
   assert.match(source,/SupabaseAuthAdapter/);
   assert.match(source,/resetPasswordForEmail/);
   for(const action of ['member.role.update','member.remove','team.owner.transfer','invitation.revoke'])assert.ok(source.includes(action),`missing cloud admin action ${action}`);
+});
+
+test('mobile invite sharing and cryptographic identifier hardening are present',()=>{
+  const cloud=read('client/cloud-entry.js'),app=read('app.js'),headers=read('_headers');
+  for(const token of ['textInviteLink','navigator.share','Text invite','Copy link','inviteShareResult'])assert.ok(cloud.includes(token),`missing invite-sharing contract: ${token}`);
+  assert.doesNotMatch(app,/Math\.random\s*\(/,'application identifiers must not fall back to Math.random');
+  assert.match(app,/crypto\?\.getRandomValues/);
+  assert.match(headers,/Cross-Origin-Resource-Policy:\s*same-origin/i);
+  assert.match(headers,/X-Permitted-Cross-Domain-Policies:\s*none/i);
+  assert.match(headers,/\/build-info\.json[\s\S]*Cache-Control:\s*no-store/i);
+});
+
+test('Little League guidance handles same-day division restrictions conservatively',()=>{
+  const app=read('app.js');
+  assert.match(app,/llb-\(minor\|major\|intermediate\)/);
+  assert.match(app,/age12JuniorSenior/);
+  assert.match(app,/sameDayThresholdReview/);
+  assert.match(app,/combinedToday/);
+  assert.match(app,/catcher\/pitcher restrictions/);
 });
 
 test('release build has environment-specific endpoints, serialized sync, safer messaging, and build identity',()=>{
