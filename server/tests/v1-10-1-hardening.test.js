@@ -13,6 +13,7 @@ test('V1.10.1 database hardening migration preserves one client RPC and adds lif
     "p_action='member.remove'","p_action='member.role.update'","p_action='team.owner.transfer'",
     "p_action='invitation.revoke'","p_action='join.revoke'",'request_payload_too_large',
     'app_validate_team_record','idx_messages_conversation_cursor','access_expiration_required','join_code_uses_out_of_range',
+    'app_join_code_create_v1_10_1',"substr(encode(gen_random_bytes(8),'hex'),1,12)",
     'alter default privileges in schema public revoke execute on functions from public'
   ]) assert.ok(sql.includes(token),`missing hardening contract: ${token}`);
   assert.match(sql,/revoke all on function public\.app_api_v1_10_core\(text,jsonb\) from authenticated/i);
@@ -46,6 +47,7 @@ test('mobile invite sharing and cryptographic identifier hardening are present',
   for(const token of ['textInviteLink','navigator.share','Text invite','Copy link','inviteShareResult'])assert.ok(cloud.includes(token),`missing invite-sharing contract: ${token}`);
   assert.doesNotMatch(app,/Math\.random\s*\(/,'application identifiers must not fall back to Math.random');
   assert.match(app,/crypto\?\.getRandomValues/);
+  assert.match(app,/safeHttpsUrl/);
   assert.match(headers,/Cross-Origin-Resource-Policy:\s*same-origin/i);
   assert.match(headers,/X-Permitted-Cross-Domain-Policies:\s*none/i);
   assert.match(headers,/\/build-info\.json[\s\S]*Cache-Control:\s*no-store/i);
@@ -58,6 +60,13 @@ test('Little League guidance handles same-day division restrictions conservative
   assert.match(app,/sameDayThresholdReview/);
   assert.match(app,/combinedToday/);
   assert.match(app,/catcher\/pitcher restrictions/);
+});
+
+test('cloud hydration is bounded instead of serial across every team',()=>{
+  const cloud=read('client/cloud-entry.js');
+  assert.match(cloud,/Math\.min\(4,orderedTeams\.length\)/);
+  assert.match(cloud,/Promise\.all\(Array\.from/);
+  assert.match(cloud,/activeId=activeRemoteId\(\)/);
 });
 
 test('release build has environment-specific endpoints, serialized sync, safer messaging, and build identity',()=>{
