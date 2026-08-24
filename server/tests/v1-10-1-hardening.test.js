@@ -13,7 +13,7 @@ test('V1.10.1 database hardening migration preserves one client RPC and adds lif
     "p_action='member.remove'","p_action='member.role.update'","p_action='team.owner.transfer'",
     "p_action='invitation.revoke'","p_action='join.revoke'",'request_payload_too_large',
     'app_validate_team_record','idx_messages_conversation_cursor','access_expiration_required','join_code_uses_out_of_range',
-    'app_join_code_create_v1_10_1',"substr(encode(gen_random_bytes(8),'hex'),1,12)",
+    'app_join_code_create_v1_10_1',"substr(encode(gen_random_bytes(8),'hex'),1,12)",'adult_attested_at','account.adult.attest','app_require_adult_attestation',
     'alter default privileges in schema public revoke execute on functions from public'
   ]) assert.ok(sql.includes(token),`missing hardening contract: ${token}`);
   assert.match(sql,/revoke all on function public\.app_api_v1_10_core\(text,jsonb\) from authenticated/i);
@@ -79,6 +79,9 @@ test('social auth is feature-gated and preserves invite callback state',()=>{
   assert.match(cloud,/SOCIAL_PROVIDER_IDS\.includes\(provider\)/);
   assert.match(cloud,/u\.searchParams\.delete\('error'\)/);
   assert.match(build,/TEAM_APP_SOCIAL_PROVIDERS/);
+  assert.match(cloud,/account\.adult\.attest/);
+  assert.match(cloud,/requireAdultAccount/);
+  assert.match(cloud,/showAdultAttestation/);
   assert.match(build,/google','apple','facebook','microsoft/);
   assert.match(css,/\.cloud-social-auth/);
   assert.match(css,/\.social-apple/);
