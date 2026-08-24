@@ -17,6 +17,8 @@ const revisions=new Map(),conflicts=new Map();
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const RPC_SPECS={
   app_me:['me',()=>({})],
+  app_account_status:['account.status',()=>({})],
+  app_account_adult_attest:['account.adult.attest',a=>({confirmed:Boolean(a.p_confirmed),version:a.p_version||'2026-08-24'})],
   app_team_create:['team.create',a=>a.p_payload||{}],
   app_team_state:['team.state.get',a=>({teamId:a.p_team})],
   app_team_update:['team.state.update',a=>({teamId:a.p_team,revision:a.p_revision,teamRecord:a.p_team_record||{},context:a.p_context||{}})],
@@ -64,6 +66,8 @@ function requestBody(options={}){if(!options.body)return {};if(typeof options.bo
 async function api(url,options={}){
   const u=new URL(url,location.origin),path=u.pathname,method=(options.method||'GET').toUpperCase(),b=requestBody(options);let m;
   if(path==='/api/me')return rpc('app_me');
+  if(path==='/api/account/status')return rpc('app_account_status');
+  if(path==='/api/account/adult-attest'&&method==='POST')return rpc('app_account_adult_attest',{p_confirmed:Boolean(b.confirmed),p_version:b.version||'2026-08-24'});
   if(path==='/api/teams'&&method==='POST')return rpc('app_team_create',{p_payload:b});
   if((m=path.match(/^\/api\/teams\/([^/]+)\/state$/)))return method==='PUT'?rpc('app_team_update',{p_team:m[1],p_revision:Number(b.revision||0),p_team_record:b.teamRecord||{},p_context:b.context||{}}):rpc('app_team_state',{p_team:m[1]});
   if((m=path.match(/^\/api\/teams\/([^/]+)\/members$/)))return rpc('app_team_members',{p_team:m[1]});
@@ -113,9 +117,17 @@ function syncResultMessage(result){
 
 async function ensureCryptoIdentity(){if(!window.TEAM_APP_E2EE)return;const jwk=await window.TEAM_APP_E2EE.publicJwk();await api('/api/crypto-key',{method:'PUT',body:JSON.stringify({publicKeyJwk:jwk,algorithm:'ECDH-P256',version:1})});}
 
+function showAdultAttestation(){
+  const el=overlay(`<div class="cloud-auth"><div class="cloud-logo">TA</div><div class="eyebrow">Adult account required</div><h1>Confirm your account</h1><p>Team APP accounts are for adult coaches, staff members, and guardians. Child athletes do not need accounts.</p><div class="notice"><strong>By continuing</strong>, you confirm that you are an adult using Team APP to manage or support a youth/team account.</div><button class="primary-btn cloud-wide" id="confirmAdultAccountBtn">I am an adult — continue</button><button class="secondary-btn cloud-wide" id="adultAccountSignOutBtn">Sign out</button></div>`);
+  el.querySelector('#confirmAdultAccountBtn')?.addEventListener('click',async e=>{const btn=e.currentTarget;try{buttonBusy(btn,true,'Saving…');await api('/api/account/adult-attest',{method:'POST',body:JSON.stringify({confirmed:true,version:'2026-08-24'})});closeOverlay();await afterLogin();}catch(err){showLogin(err.message);}finally{buttonBusy(btn,false);}});
+  el.querySelector('#adultAccountSignOutBtn')?.addEventListener('click',async()=>{await authClient.signOut();location.reload();});
+}
+async function requireAdultAccount(){const status=await api('/api/account/status');if(status?.adultAttested)return true;showAdultAttestation();return false;}
+
 async function start(rt){runtime=rt;if(location.search.includes('demo=1')){hydrating=false;return;}try{const r=await authClient.getSession();session=r?.data||r;if(!session?.user){showLogin();hydrating=false;return;}await afterLogin();}catch(err){console.error('[cloud start]',err);showLogin(err.message);hydrating=false;}}
 async function afterLogin(){
   session=(await authClient.getSession())?.data||session;
+  if(!await requireAdultAccount()){hydrating=false;return;}
   const pendingInvite=new URLSearchParams(location.search).get('invite');
   if(pendingInvite){try{await api('/api/invitations/accept',{method:'POST',body:JSON.stringify({token:pendingInvite})});const u=new URL(location.href);u.searchParams.delete('invite');history.replaceState(null,'',u.pathname+u.search+u.hash);}catch(e){console.warn('[invite accept]',e);}}
   me=await api('/api/me');await ensureCryptoIdentity().catch(e=>console.warn('[e2ee identity]',e));
