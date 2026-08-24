@@ -68,6 +68,7 @@ run_batch 'Responsive + security + stress browser contracts' \
   'Connectivity and offline status' tests/e2e_connectivity.py \
   'Runtime hardening' tests/e2e_runtime_hardening.py \
   'Hostile input / XSS' tests/e2e_xss.py \
+  'Poisoned saved-state security' tests/e2e_poisoned_state.py \
   'Mobile accessibility labels' tests/e2e_accessibility.py \
   'Heavy mobile data stress' tests/e2e_stress.py \
   'Extreme season stress' tests/e2e_extreme_stress.py
