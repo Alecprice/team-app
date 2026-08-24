@@ -141,7 +141,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path to 'public','pg_temp'
-as $
+as $join$
 declare v_code text; v_hash text; v_athlete uuid; v_id uuid; v_expires integer; v_uses integer;
 begin
   if coalesce(public.app_team_role(p_team,p_user)::text,'') not in ('owner','admin','coach') then raise exception 'admin_role_required' using errcode='42501'; end if;
@@ -155,7 +155,7 @@ begin
     values(p_team,v_athlete,'guardian',v_hash,right(v_code,4),v_uses,now()+make_interval(hours=>v_expires),p_user)
     returning id into v_id;
   return jsonb_build_object('id',v_id,'role','guardian','code',v_code,'code_hint',right(v_code,4));
-end $;
+end $join$;
 
 revoke all on function public.app_join_code_create_v1_10_1(uuid,uuid,jsonb) from public,anonymous,authenticated;
 
