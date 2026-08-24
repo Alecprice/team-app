@@ -11,6 +11,7 @@ const authUrl=process.env.TEAM_APP_NEON_AUTH_URL||DEFAULT_AUTH;
 const dataUrl=process.env.TEAM_APP_NEON_DATA_API_URL||DEFAULT_DATA;
 const buildEnv=process.env.TEAM_APP_ENV||process.env.CF_PAGES_BRANCH||'local';
 const commitSha=process.env.CF_PAGES_COMMIT_SHA||process.env.GITHUB_SHA||'local';
+const socialProviders=(process.env.TEAM_APP_SOCIAL_PROVIDERS||'').split(',').map(x=>x.trim().toLowerCase()).filter(x=>['google','apple','facebook'].includes(x)).join(',');
 const OLD_SEND="el.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();if(!current)return;const input=e.currentTarget.message,text=input.value.trim();if(!text)return;input.value='';const encrypted=await window.TEAM_APP_E2EE.encryptMessage(conv.id,current.keyVersion,current.key,text);await api(`/api/conversations/${conv.id}/messages`,{method:'POST',body:JSON.stringify({...encrypted,clientMessageId:crypto.randomUUID()})});await load();};";
 const NEW_SEND="el.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();if(!current)return;const form=e.currentTarget,input=form.message,btn=form.querySelector('button[type=submit],button:not([type])'),text=input.value.trim();if(!text)return;input.disabled=true;if(btn)buttonBusy(btn,true,'Sending…');try{const encrypted=await window.TEAM_APP_E2EE.encryptMessage(conv.id,current.keyVersion,current.key,text);await api(`/api/conversations/${conv.id}/messages`,{method:'POST',body:JSON.stringify({...encrypted,clientMessageId:crypto.randomUUID()})});input.value='';await load();}catch(err){input.value=text;runtime?.toast?.('Message was not sent. Your draft is still here.');throw err;}finally{input.disabled=false;if(btn)buttonBusy(btn,false);input.focus();}};";
 const SYNC_DECL='async function syncActive(force=false){';
@@ -20,7 +21,7 @@ const POLL_NEW="await load();const poll=()=>{if(document.visibilityState==='visi
 const DIRECT_OLD='const directTargets=members.filter(m=>m.id!==me?.user?.id);';
 const DIRECT_NEW='const directTargets=members.filter(m=>m.id!==me?.user?.id&&(coach||coachRoles.has(m.role)));';
 const sourcePlugin={name:'team-app-cloud-source-hardening',setup(ctx){ctx.onLoad({filter:/client\/(?:cloud-entry|cloud-admin-hardening)\.js$/},async args=>{
-  let contents=await fs.readFile(args.path,'utf8');contents=contents.replaceAll(DEFAULT_AUTH,authUrl).replaceAll(DEFAULT_DATA,dataUrl);
+  let contents=await fs.readFile(args.path,'utf8');contents=contents.replaceAll(DEFAULT_AUTH,authUrl).replaceAll(DEFAULT_DATA,dataUrl).replaceAll('__TEAM_APP_SOCIAL_PROVIDERS__',socialProviders);
   if(args.path.endsWith('cloud-entry.js')){
     for(const [needle,label] of [[OLD_SEND,'message send'],[SYNC_DECL,'sync declaration'],[QUEUE_DECL,'queue declaration'],[POLL_OLD,'message polling'],[DIRECT_OLD,'direct-message targets']])if(!contents.includes(needle))throw new Error(`Cloud ${label} source contract changed; update the hardening transform.`);
     contents=contents.replace(OLD_SEND,NEW_SEND);
@@ -39,3 +40,4 @@ for(const dir of ['core','icons'])await fs.cp(path.join(root,dir),path.join(dist
 await fs.writeFile(path.join(dist,'build-info.json'),JSON.stringify({app:'team-app',version:pkg.version,environment:buildEnv,commit:commitSha,builtAt:new Date().toISOString()},null,2)+'\n');
 console.log('Built Team APP static Cloudflare Pages output:',dist);
 console.log(`Environment: ${buildEnv} · commit: ${commitSha}`);
+console.log(`Social providers: ${socialProviders||'none'}`);
