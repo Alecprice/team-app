@@ -44,6 +44,21 @@ begin
   if not coalesce(v_verified,false) then raise exception 'email_verification_required' using errcode='42501'; end if;
 end $$;
 
+alter table public.users add column if not exists adult_attested_at timestamptz;
+alter table public.users add column if not exists adult_attestation_version text;
+
+create or replace function public.app_require_adult_attestation()
+returns void language plpgsql security definer
+set search_path to 'public','pg_temp'
+as $adult$
+declare v_user uuid:=public.app_current_user_id(); v_at timestamptz;
+begin
+  select adult_attested_at into v_at from public.users where id=v_user;
+  if v_at is null then raise exception 'adult_attestation_required' using errcode='42501'; end if;
+end $adult$;
+
+revoke all on function public.app_require_adult_attestation() from public,anonymous,authenticated;
+
 create or replace function public.app_verified_membership_guard()
 returns trigger language plpgsql security definer
 set search_path to 'public','neon_auth','pg_temp'
@@ -173,6 +188,21 @@ begin
   if p_action in ('team.create','team.state.update') then perform public.app_validate_team_record(coalesce(payload->'teamRecord','{}'::jsonb)); end if;
   if p_action='document.upload' and coalesce(payload->>'category','') ~* '^medical\s*/\s*safety$' then raise exception 'medical_documents_require_restricted_storage' using errcode='42501'; end if;
   if p_action in ('team.create','invitation.accept','join.redeem') then perform public.app_require_verified_email(); end if;
+  if p_action='account.status' then
+    u:=public.app_current_user_id();
+    return jsonb_build_object(
+      'adultAttested',(select adult_attested_at is not null from public.users where id=u),
+      'adultAttestedAt',(select adult_attested_at from public.users where id=u),
+      'adultAttestationVersion',(select adult_attestation_version from public.users where id=u)
+    );
+  end if;
+  if p_action='account.adult.attest' then
+    u:=public.app_current_user_id();
+    if coalesce((payload->>'confirmed')::boolean,false) is not true then raise exception 'adult_confirmation_required' using errcode='22023'; end if;
+    update public.users set adult_attested_at=coalesce(adult_attested_at,now()),adult_attestation_version=coalesce(nullif(payload->>'version',''),'2026-08-24') where id=u;
+    return jsonb_build_object('ok',true,'adultAttested',true);
+  end if;
+  if p_action in ('team.create','invitation.accept','join.redeem') then perform public.app_require_adult_attestation(); end if;
 
   if p_action in ('team.create','form.create','invitation.create','join.create') then
     u:=public.app_current_user_id();
