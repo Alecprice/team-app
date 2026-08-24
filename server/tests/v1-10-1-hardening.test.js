@@ -69,6 +69,22 @@ test('cloud hydration is bounded instead of serial across every team',()=>{
   assert.match(cloud,/activeId=activeRemoteId\(\)/);
 });
 
+
+test('social auth is feature-gated and preserves invite callback state',()=>{
+  const cloud=read('client/cloud-entry.js'),build=read('scripts/build-cloudflare.js'),css=read('styles.css');
+  for(const token of [
+    '__TEAM_APP_SOCIAL_PROVIDERS__','signIn.social','socialCallbackURL',
+    'Continue with Google','Continue with Apple','Continue with Facebook','Continue with Microsoft'
+  ]) assert.ok(cloud.includes(token),`missing social auth contract: ${token}`);
+  assert.match(cloud,/SOCIAL_PROVIDER_IDS\.includes\(provider\)/);
+  assert.match(cloud,/u\.searchParams\.delete\('error'\)/);
+  assert.match(build,/TEAM_APP_SOCIAL_PROVIDERS/);
+  assert.match(build,/google','apple','facebook','microsoft/);
+  assert.match(css,/\.cloud-social-auth/);
+  assert.match(css,/\.social-apple/);
+  assert.match(css,/\.social-facebook/);
+});
+
 test('release build has environment-specific endpoints, serialized sync, safer messaging, and build identity',()=>{
   const build=read('scripts/build-cloudflare.js'),smoke=read('scripts/smoke-production.mjs');
   for(const token of [
