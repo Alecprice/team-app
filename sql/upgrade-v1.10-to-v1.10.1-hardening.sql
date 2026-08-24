@@ -186,8 +186,14 @@ begin
   if p_action in ('invitation.create','join.create') and coalesce(payload->>'role','guardian')='guardian' and nullif(payload->>'athleteClientKey','') is null then raise exception 'guardian_requires_athlete' using errcode='42501'; end if;
 
   if p_action in ('invitation.create','join.create') then
-    if coalesce(payload->>'expiresHours','') !~ '^[0-9]+
+    if coalesce(payload->>'expiresHours','') !~ '^[0-9]+$' then raise exception 'access_expiration_required' using errcode='22023'; end if;
+    v_expires:=(payload->>'expiresHours')::integer;
+    if v_expires<1 or v_expires>168 then raise exception 'access_expiration_out_of_range' using errcode='22023'; end if;
+  end if;
   if p_action='join.create' then
+    if coalesce(payload->>'maxUses','1') !~ '^[0-9]+$' then raise exception 'invalid_join_code_uses' using errcode='22023'; end if;
+    v_max_uses:=coalesce((payload->>'maxUses')::integer,1);
+    if v_max_uses<1 or v_max_uses>10 then raise exception 'join_code_uses_out_of_range' using errcode='22023'; end if;
     u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid;
     perform public.app_check_rate(u,'all',1200,60); perform public.app_check_rate(u,'join.create',20,3600);
     return public.app_join_code_create_v1_10_1(v_team,u,payload);
@@ -204,153 +210,6 @@ begin
       join public.roster_memberships rm on rm.athlete_id=gr.athlete_id
       where gr.guardian_user_id=v_target and rm.team_id=v_team
     ) then raise exception 'guardian_requires_athlete' using errcode='42501'; end if;
-    if actor_role<>'owner' and (public.app_role_rank(actor_role)<=public.app_role_rank(target_role) or public.app_role_rank(actor_role)<=public.app_role_rank(new_role)) then raise exception 'role_change_not_allowed' using errcode='42501'; end if;
-    update public.team_memberships tm set role=new_role where tm.team_id=v_team and tm.user_id=v_target;
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
-  end if;
-
-  if p_action='member.remove' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid;
-    actor_role:=public.app_team_role(v_team,u); target_role:=public.app_team_role(v_team,v_target);
-    if target_role is null then raise exception 'not_a_team_member'; end if;
-    if target_role='owner' then raise exception 'owner_role_protected' using errcode='42501'; end if;
-    if v_target<>u and (actor_role is null or (actor_role<>'owner' and public.app_role_rank(actor_role)<=public.app_role_rank(target_role))) then raise exception 'member_remove_not_allowed' using errcode='42501'; end if;
-    delete from public.conversation_members cm using public.conversations c where cm.conversation_id=c.id and c.team_id=v_team and cm.user_id=v_target;
-    delete from public.guardian_relationships gr where gr.guardian_user_id=v_target and exists(select 1 from public.roster_memberships rm where rm.team_id=v_team and rm.athlete_id=gr.athlete_id);
-    delete from public.team_memberships tm where tm.team_id=v_team and tm.user_id=v_target;
-    select t.organization_id into v_org from public.teams t where t.id=v_team;
-    insert into public.audit_events(organization_id,actor_user_id,action,entity_type,entity_id,metadata) values(v_org,u,'team.member.remove','team_membership',v_target::text,jsonb_build_object('teamId',v_team,'rekeyRequired',true));
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
-  end if;
-
-  if p_action='team.owner.transfer' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid;
-    if public.app_team_role(v_team,u)<>'owner' then raise exception 'owner_role_required' using errcode='42501'; end if;
-    if public.app_team_role(v_team,v_target) is null then raise exception 'target_not_team_member'; end if;
-    update public.team_memberships tm set role='admin' where tm.team_id=v_team and tm.user_id=u;
-    update public.team_memberships tm set role='owner' where tm.team_id=v_team and tm.user_id=v_target;
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
-  end if;
-
-  if p_action='invitation.revoke' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_object:=(payload->>'invitationId')::uuid;
-    if not public.app_is_coach(v_team,u) then raise exception 'coach_role_required' using errcode='42501'; end if;
-    update public.team_invitations ti set revoked_at=now() where ti.id=v_object and ti.team_id=v_team and ti.accepted_at is null;
-    if not found then raise exception 'invitation_not_revocable'; end if;
-    return jsonb_build_object('ok',true);
-  end if;
-
-  if p_action='join.revoke' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_object:=(payload->>'joinCodeId')::uuid;
-    if not public.app_is_coach(v_team,u) then raise exception 'coach_role_required' using errcode='42501'; end if;
-    update public.team_join_codes jc set is_active=false where jc.id=v_object and jc.team_id=v_team and jc.is_active;
-    if not found then raise exception 'join_code_not_revocable'; end if;
-    return jsonb_build_object('ok',true);
-  end if;
-
-  return public.app_api_v1_10_core(p_action,payload);
-end $$;
-
-create index if not exists idx_team_memberships_user_team on public.team_memberships(user_id,team_id);
-create index if not exists idx_conversation_members_user_conversation on public.conversation_members(user_id,conversation_id);
-create index if not exists idx_messages_conversation_cursor on public.messages(conversation_id,sent_at,id);
-create index if not exists idx_guardian_relationships_user_athlete on public.guardian_relationships(guardian_user_id,athlete_id);
-create index if not exists idx_audit_events_org_created on public.audit_events(organization_id,created_at desc);
-
-revoke all on function public.app_api_v1_10_core(text,jsonb) from public;
-revoke all on function public.app_api_v1_10_core(text,jsonb) from anonymous;
-revoke all on function public.app_api_v1_10_core(text,jsonb) from authenticated;
-revoke all on function public.app_api(text,jsonb) from public;
-revoke all on function public.app_api(text,jsonb) from anonymous;
-grant execute on function public.app_api(text,jsonb) to authenticated;
-alter default privileges in schema public revoke execute on functions from public;
-
-commit;
- then raise exception 'access_expiration_required' using errcode='22023'; end if;
-    v_expires:=(payload->>'expiresHours')::integer;
-    if v_expires<1 or v_expires>168 then raise exception 'access_expiration_out_of_range' using errcode='22023'; end if;
-  end if;
-  if p_action='join.create' then
-    if coalesce(payload->>'maxUses','1') !~ '^[0-9]+
-  if p_action='member.role.update' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid; new_role:=(payload->>'role')::organization_role;
-    actor_role:=public.app_team_role(v_team,u); target_role:=public.app_team_role(v_team,v_target);
-    if actor_role is null or target_role is null then raise exception 'not_a_team_member' using errcode='42501'; end if;
-    if new_role='owner' then raise exception 'use_owner_transfer'; end if;
-    if target_role='owner' then raise exception 'owner_role_protected' using errcode='42501'; end if;
-    if actor_role<>'owner' and (public.app_role_rank(actor_role)<=public.app_role_rank(target_role) or public.app_role_rank(actor_role)<=public.app_role_rank(new_role)) then raise exception 'role_change_not_allowed' using errcode='42501'; end if;
-    update public.team_memberships tm set role=new_role where tm.team_id=v_team and tm.user_id=v_target;
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
-  end if;
-
-  if p_action='member.remove' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid;
-    actor_role:=public.app_team_role(v_team,u); target_role:=public.app_team_role(v_team,v_target);
-    if target_role is null then raise exception 'not_a_team_member'; end if;
-    if target_role='owner' then raise exception 'owner_role_protected' using errcode='42501'; end if;
-    if v_target<>u and (actor_role is null or (actor_role<>'owner' and public.app_role_rank(actor_role)<=public.app_role_rank(target_role))) then raise exception 'member_remove_not_allowed' using errcode='42501'; end if;
-    delete from public.conversation_members cm using public.conversations c where cm.conversation_id=c.id and c.team_id=v_team and cm.user_id=v_target;
-    delete from public.guardian_relationships gr where gr.guardian_user_id=v_target and exists(select 1 from public.roster_memberships rm where rm.team_id=v_team and rm.athlete_id=gr.athlete_id);
-    delete from public.team_memberships tm where tm.team_id=v_team and tm.user_id=v_target;
-    select t.organization_id into v_org from public.teams t where t.id=v_team;
-    insert into public.audit_events(organization_id,actor_user_id,action,entity_type,entity_id,metadata) values(v_org,u,'team.member.remove','team_membership',v_target::text,jsonb_build_object('teamId',v_team,'rekeyRequired',true));
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
-  end if;
-
-  if p_action='team.owner.transfer' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid;
-    if public.app_team_role(v_team,u)<>'owner' then raise exception 'owner_role_required' using errcode='42501'; end if;
-    if public.app_team_role(v_team,v_target) is null then raise exception 'target_not_team_member'; end if;
-    update public.team_memberships tm set role='admin' where tm.team_id=v_team and tm.user_id=u;
-    update public.team_memberships tm set role='owner' where tm.team_id=v_team and tm.user_id=v_target;
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
-  end if;
-
-  if p_action='invitation.revoke' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_object:=(payload->>'invitationId')::uuid;
-    if not public.app_is_coach(v_team,u) then raise exception 'coach_role_required' using errcode='42501'; end if;
-    update public.team_invitations ti set revoked_at=now() where ti.id=v_object and ti.team_id=v_team and ti.accepted_at is null;
-    if not found then raise exception 'invitation_not_revocable'; end if;
-    return jsonb_build_object('ok',true);
-  end if;
-
-  if p_action='join.revoke' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_object:=(payload->>'joinCodeId')::uuid;
-    if not public.app_is_coach(v_team,u) then raise exception 'coach_role_required' using errcode='42501'; end if;
-    update public.team_join_codes jc set is_active=false where jc.id=v_object and jc.team_id=v_team and jc.is_active;
-    if not found then raise exception 'join_code_not_revocable'; end if;
-    return jsonb_build_object('ok',true);
-  end if;
-
-  return public.app_api_v1_10_core(p_action,payload);
-end $$;
-
-create index if not exists idx_team_memberships_user_team on public.team_memberships(user_id,team_id);
-create index if not exists idx_conversation_members_user_conversation on public.conversation_members(user_id,conversation_id);
-create index if not exists idx_messages_conversation_cursor on public.messages(conversation_id,sent_at,id);
-create index if not exists idx_guardian_relationships_user_athlete on public.guardian_relationships(guardian_user_id,athlete_id);
-create index if not exists idx_audit_events_org_created on public.audit_events(organization_id,created_at desc);
-
-revoke all on function public.app_api_v1_10_core(text,jsonb) from public;
-revoke all on function public.app_api_v1_10_core(text,jsonb) from anonymous;
-revoke all on function public.app_api_v1_10_core(text,jsonb) from authenticated;
-revoke all on function public.app_api(text,jsonb) from public;
-revoke all on function public.app_api(text,jsonb) from anonymous;
-grant execute on function public.app_api(text,jsonb) to authenticated;
-alter default privileges in schema public revoke execute on functions from public;
-
-commit;
- then raise exception 'invalid_join_code_uses' using errcode='22023'; end if;
-    v_max_uses:=coalesce((payload->>'maxUses')::integer,1);
-    if v_max_uses<1 or v_max_uses>10 then raise exception 'join_code_uses_out_of_range' using errcode='22023'; end if;
-  end if;
-
-  if p_action='member.role.update' then
-    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid; new_role:=(payload->>'role')::organization_role;
-    actor_role:=public.app_team_role(v_team,u); target_role:=public.app_team_role(v_team,v_target);
-    if actor_role is null or target_role is null then raise exception 'not_a_team_member' using errcode='42501'; end if;
-    if new_role='owner' then raise exception 'use_owner_transfer'; end if;
-    if target_role='owner' then raise exception 'owner_role_protected' using errcode='42501'; end if;
     if actor_role<>'owner' and (public.app_role_rank(actor_role)<=public.app_role_rank(target_role) or public.app_role_rank(actor_role)<=public.app_role_rank(new_role)) then raise exception 'role_change_not_allowed' using errcode='42501'; end if;
     update public.team_memberships tm set role=new_role where tm.team_id=v_team and tm.user_id=v_target;
     return jsonb_build_object('ok',true,'rekeyRequired',true);
