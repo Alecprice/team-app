@@ -113,8 +113,10 @@ async function afterLogin(){
   if(pendingInvite){try{await api('/api/invitations/accept',{method:'POST',body:JSON.stringify({token:pendingInvite})});const u=new URL(location.href);u.searchParams.delete('invite');history.replaceState(null,'',u.pathname+u.search+u.hash);}catch(e){console.warn('[invite accept]',e);}}
   me=await api('/api/me');await ensureCryptoIdentity().catch(e=>console.warn('[e2ee identity]',e));
   if(!me.teams?.length){showFirstTeam();hydrating=false;return;}
-  const queued=new Map(await queuedRows()),cloudTeams=[];
-  for(const t of me.teams){try{const detail=await api(`/api/teams/${t.id}/state`);revisions.set(t.id,Number(detail.revision||0));cloudTeams.push(detail);}catch(e){console.error('[cloud team]',t.id,e);}}
+  const queued=new Map(await queuedRows()),activeId=activeRemoteId(),orderedTeams=[...me.teams].sort((a,b)=>(a.id===activeId?-1:b.id===activeId?1:0)),slots=new Array(orderedTeams.length);let hydrateCursor=0;
+  const hydrateWorker=async()=>{while(hydrateCursor<orderedTeams.length){const index=hydrateCursor++,t=orderedTeams[index];try{const detail=await api(`/api/teams/${t.id}/state`);revisions.set(t.id,Number(detail.revision||0));slots[index]=detail;}catch(e){console.error('[cloud team]',t.id,e);}}};
+  await Promise.all(Array.from({length:Math.min(4,orderedTeams.length)},()=>hydrateWorker()));
+  const cloudTeams=slots.filter(Boolean);
   if(queued.size){for(const detail of cloudTeams)if(!queued.has(detail.id))runtime?.replaceOneCloudTeam?.(detail);}else runtime?.replaceCloudTeams?.(cloudTeams);
   hydrating=false;await flushQueue();runtime?.refresh?.();
 }
