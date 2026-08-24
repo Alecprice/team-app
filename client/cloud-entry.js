@@ -5,6 +5,12 @@ const NEON_DATA_API_URL='https://ep-noisy-violet-awtos8ns.apirest.c-12.us-east-1
 const neon=createClient({auth:{url:NEON_AUTH_URL},dataApi:{url:NEON_DATA_API_URL}});
 const authClient=neon.auth;
 const coachRoles=new Set(['owner','admin','coach','assistant_coach','manager']);
+const SOCIAL_PROVIDER_IDS='__TEAM_APP_SOCIAL_PROVIDERS__'.split(',').map(x=>x.trim().toLowerCase()).filter(x=>['google','apple','facebook'].includes(x));
+const SOCIAL_PROVIDER_META={
+  google:{label:'Continue with Google',className:'google'},
+  apple:{label:'Continue with Apple',className:'apple'},
+  facebook:{label:'Continue with Facebook',className:'facebook'}
+};
 let runtime=null,session=null,me=null,hydrating=true,syncTimer=null,pollTimer=null,activeConversation=null;
 const revisions=new Map(),conflicts=new Map();
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -121,8 +127,23 @@ async function afterLogin(){
   hydrating=false;await flushQueue();runtime?.refresh?.();
 }
 
+function socialCallbackURL(){const u=new URL(location.href);u.searchParams.delete('error');u.searchParams.delete('error_description');return u.pathname+u.search+u.hash;}
+async function startSocialAuth(provider,button){
+  if(!SOCIAL_PROVIDER_IDS.includes(provider))throw new Error(`${provider} sign-in is not configured yet.`);
+  try{
+    buttonBusy(button,true,'Opening…');
+    const result=await authClient.signIn.social({provider,callbackURL:socialCallbackURL()});
+    if(result?.error)throw new Error(result.error.message||`Could not start ${provider} sign-in.`);
+  }catch(err){showLogin(err.message);}finally{buttonBusy(button,false);}
+}
+function socialButtons(){
+  if(!SOCIAL_PROVIDER_IDS.length)return '';
+  return `<div class="cloud-social-auth" aria-label="Social sign in">${SOCIAL_PROVIDER_IDS.map(id=>`<button type="button" class="social-auth-btn social-${esc(SOCIAL_PROVIDER_META[id].className)}" data-social-provider="${esc(id)}">${id==='google'?'<span aria-hidden="true">G</span>':id==='apple'?'<span aria-hidden="true"></span>':'<span aria-hidden="true">f</span>'}<b>${esc(SOCIAL_PROVIDER_META[id].label)}</b></button>`).join('')}</div><div class="auth-divider"><span>or use email</span></div>`;
+}
 function showLogin(message=''){
-  const el=overlay(`<div class="cloud-auth"><div class="cloud-logo">TA</div><div class="eyebrow">Secure Team APP</div><h1>Sign in</h1><p>Adult coach and guardian accounts keep team data synchronized across devices.</p>${message?`<div class="cloud-error">${esc(message)}</div>`:''}<div class="cloud-tabs"><button data-auth-tab="signin" class="active">Sign in</button><button data-auth-tab="signup">Create account</button></div><form id="cloudAuthForm"><div class="field" data-name-field hidden><label>Name</label><input name="name" autocomplete="name"></div><div class="field"><label>Email</label><input name="email" type="email" autocomplete="username" required></div><div class="field"><label>Password</label><input name="password" type="password" minlength="10" autocomplete="current-password" required></div><label class="cloud-adult" data-adult-field hidden><input type="checkbox" name="adult"> I am an adult coach, staff member, or guardian.</label><button class="primary-btn cloud-wide" id="cloudAuthSubmit">Sign in</button></form><div class="cloud-auth-alt"><span class="cloud-small">Secure email/password sign-in is provided by Neon Managed Auth.</span></div><p class="cloud-small">Child athletes do not need accounts. Guardians manage youth profiles.</p></div>`);
+  const oauthError=new URLSearchParams(location.search).get('error');if(!message&&oauthError)message=oauthError==='email_not_verified'?'Verify your email before continuing.':`Social sign-in could not be completed (${oauthError}).`;
+  const el=overlay(`<div class="cloud-auth"><div class="cloud-logo">TA</div><div class="eyebrow">Secure Team APP</div><h1>Sign in</h1><p>Adult coach and guardian accounts keep team data synchronized across devices.</p>${message?`<div class="cloud-error">${esc(message)}</div>`:''}${socialButtons()}<div class="cloud-tabs"><button data-auth-tab="signin" class="active">Sign in</button><button data-auth-tab="signup">Create account</button></div><form id="cloudAuthForm"><div class="field" data-name-field hidden><label>Name</label><input name="name" autocomplete="name"></div><div class="field"><label>Email</label><input name="email" type="email" autocomplete="username" required></div><div class="field"><label>Password</label><input name="password" type="password" minlength="10" autocomplete="current-password" required></div><label class="cloud-adult" data-adult-field hidden><input type="checkbox" name="adult"> I am an adult coach, staff member, or guardian.</label><button class="primary-btn cloud-wide" id="cloudAuthSubmit">Sign in</button></form><div class="cloud-auth-alt"><span class="cloud-small">Social sign-in or secure email/password authentication is provided by Neon Managed Auth.</span></div><p class="cloud-small">Adult accounts only. Child athletes do not need accounts; guardians manage youth profiles.</p></div>`);
+  el.querySelectorAll('[data-social-provider]').forEach(b=>b.addEventListener('click',()=>startSocialAuth(b.dataset.socialProvider,b)));
   let mode='signin';el.querySelectorAll('[data-auth-tab]').forEach(b=>b.onclick=()=>{mode=b.dataset.authTab;el.querySelectorAll('[data-auth-tab]').forEach(x=>x.classList.toggle('active',x===b));el.querySelector('[data-name-field]').hidden=mode!=='signup';el.querySelector('[data-adult-field]').hidden=mode!=='signup';el.querySelector('#cloudAuthSubmit').textContent=mode==='signup'?'Create adult account':'Sign in';});
   el.querySelector('#cloudAuthForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.currentTarget),btn=el.querySelector('#cloudAuthSubmit');try{buttonBusy(btn,true);if(mode==='signup'){if(!f.get('adult'))throw new Error('Confirm that this is an adult account.');const result=await authClient.signUp.email({email:String(f.get('email')),password:String(f.get('password')),name:String(f.get('name')||f.get('email'))});if(result.error)throw new Error(result.error.message);}else{const result=await authClient.signIn.email({email:String(f.get('email')),password:String(f.get('password'))});if(result.error)throw new Error(result.error.message);}closeOverlay();await afterLogin();}catch(err){showLogin(err.message);}finally{buttonBusy(btn,false);}};
 }
