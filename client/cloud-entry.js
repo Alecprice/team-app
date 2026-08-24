@@ -5,11 +5,12 @@ const NEON_DATA_API_URL='https://ep-noisy-violet-awtos8ns.apirest.c-12.us-east-1
 const neon=createClient({auth:{url:NEON_AUTH_URL},dataApi:{url:NEON_DATA_API_URL}});
 const authClient=neon.auth;
 const coachRoles=new Set(['owner','admin','coach','assistant_coach','manager']);
-const SOCIAL_PROVIDER_IDS='__TEAM_APP_SOCIAL_PROVIDERS__'.split(',').map(x=>x.trim().toLowerCase()).filter(x=>['google','apple','facebook'].includes(x));
+const SOCIAL_PROVIDER_IDS='__TEAM_APP_SOCIAL_PROVIDERS__'.split(',').map(x=>x.trim().toLowerCase()).filter(x=>['google','apple','facebook','microsoft'].includes(x));
 const SOCIAL_PROVIDER_META={
   google:{label:'Continue with Google',className:'google'},
   apple:{label:'Continue with Apple',className:'apple'},
-  facebook:{label:'Continue with Facebook',className:'facebook'}
+  facebook:{label:'Continue with Facebook',className:'facebook'},
+  microsoft:{label:'Continue with Microsoft',className:'microsoft'}
 };
 let runtime=null,session=null,me=null,hydrating=true,syncTimer=null,pollTimer=null,activeConversation=null;
 const revisions=new Map(),conflicts=new Map();
@@ -138,7 +139,7 @@ async function startSocialAuth(provider,button){
 }
 function socialButtons(){
   if(!SOCIAL_PROVIDER_IDS.length)return '';
-  return `<div class="cloud-social-auth" aria-label="Social sign in">${SOCIAL_PROVIDER_IDS.map(id=>`<button type="button" class="social-auth-btn social-${esc(SOCIAL_PROVIDER_META[id].className)}" data-social-provider="${esc(id)}">${id==='google'?'<span aria-hidden="true">G</span>':id==='apple'?'<span aria-hidden="true"></span>':'<span aria-hidden="true">f</span>'}<b>${esc(SOCIAL_PROVIDER_META[id].label)}</b></button>`).join('')}</div><div class="auth-divider"><span>or use email</span></div>`;
+  return `<div class="cloud-social-auth" aria-label="Social sign in">${SOCIAL_PROVIDER_IDS.map(id=>`<button type="button" class="social-auth-btn social-${esc(SOCIAL_PROVIDER_META[id].className)}" data-social-provider="${esc(id)}">${id==='google'?'<span aria-hidden="true">G</span>':id==='apple'?'<span aria-hidden="true"></span>':id==='facebook'?'<span aria-hidden="true">f</span>':'<span aria-hidden="true">M</span>'}<b>${esc(SOCIAL_PROVIDER_META[id].label)}</b></button>`).join('')}</div><div class="auth-divider"><span>or use email</span></div>`;
 }
 function showLogin(message=''){
   const oauthError=new URLSearchParams(location.search).get('error');if(!message&&oauthError)message=oauthError==='email_not_verified'?'Verify your email before continuing.':`Social sign-in could not be completed (${oauthError}).`;
