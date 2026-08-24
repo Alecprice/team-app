@@ -136,6 +136,29 @@ drop trigger if exists trg_key_envelope_immutable on public.conversation_key_env
 create trigger trg_key_envelope_immutable before update on public.conversation_key_envelopes
 for each row execute function public.app_key_envelope_immutable_guard();
 
+create or replace function public.app_join_code_create_v1_10_1(p_team uuid,p_user uuid,p_payload jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public','pg_temp'
+as $
+declare v_code text; v_hash text; v_athlete uuid; v_id uuid; v_expires integer; v_uses integer;
+begin
+  if coalesce(public.app_team_role(p_team,p_user)::text,'') not in ('owner','admin','coach') then raise exception 'admin_role_required' using errcode='42501'; end if;
+  if coalesce(p_payload->>'role','guardian')<>'guardian' then raise exception 'invalid_join_role'; end if;
+  if nullif(p_payload->>'athleteClientKey','') is null then raise exception 'guardian_requires_athlete' using errcode='42501'; end if;
+  v_expires:=(p_payload->>'expiresHours')::integer; v_uses:=coalesce((p_payload->>'maxUses')::integer,1);
+  select ap.id into v_athlete from public.roster_memberships rm join public.athlete_profiles ap on ap.id=rm.athlete_id where rm.team_id=p_team and ap.client_key=p_payload->>'athleteClientKey' limit 1;
+  if v_athlete is null then raise exception 'athlete_not_found' using errcode='42501'; end if;
+  v_code:=upper(substr(encode(gen_random_bytes(8),'hex'),1,12)); v_hash:=encode(digest(v_code,'sha256'),'hex');
+  insert into public.team_join_codes(team_id,athlete_id,role,code_hash,code_hint,max_uses,expires_at,created_by)
+    values(p_team,v_athlete,'guardian',v_hash,right(v_code,4),v_uses,now()+make_interval(hours=>v_expires),p_user)
+    returning id into v_id;
+  return jsonb_build_object('id',v_id,'role','guardian','code',v_code,'code_hint',right(v_code,4));
+end $;
+
+revoke all on function public.app_join_code_create_v1_10_1(uuid,uuid,jsonb) from public,anonymous,authenticated;
+
 create or replace function public.app_api(p_action text,p_payload jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security definer
 set search_path to 'public','neon_auth','auth','pg_temp'
@@ -164,6 +187,12 @@ begin
 
   if p_action in ('invitation.create','join.create') then
     if coalesce(payload->>'expiresHours','') !~ '^[0-9]+
+  if p_action='join.create' then
+    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid;
+    perform public.app_check_rate(u,'all',1200,60); perform public.app_check_rate(u,'join.create',20,3600);
+    return public.app_join_code_create_v1_10_1(v_team,u,payload);
+  end if;
+
   if p_action='member.role.update' then
     u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_target:=(payload->>'userId')::uuid; new_role:=(payload->>'role')::organization_role;
     actor_role:=public.app_team_role(v_team,u); target_role:=public.app_team_role(v_team,v_target);
