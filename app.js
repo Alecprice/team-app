@@ -207,7 +207,7 @@
   }
   function save(){const ok=storageSet(STORAGE_KEY,JSON.stringify(state));if(!ok)console.warn('Team APP is using temporary in-memory storage for this session.');window.TeamAppCloud?.scheduleSync?.();}
   function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));}
-  function uid(prefix){const token=globalThis.crypto?.randomUUID?.().replace(/-/g,'')||`${Date.now().toString(36)}${Math.random().toString(36).slice(2,12)}`;return `${prefix}${token}`;}
+  function uid(prefix){let token=globalThis.crypto?.randomUUID?.().replace(/-/g,'');if(!token&&globalThis.crypto?.getRandomValues){const bytes=new Uint8Array(16);globalThis.crypto.getRandomValues(bytes);token=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');}if(!token)throw new Error('Secure random number generation is unavailable on this device.');return `${prefix}${token}`;}
   function team(){return state.teams.find(t=>t.id===state.currentTeamId) || state.teams[0];}
   function coachUI(){return !window.TeamAppCloud?.session || window.TeamAppCloud?.canCoach?.()!==false;}
   function cloudRole(){return window.TeamAppCloud?.roleForActiveTeam?.()||null;}
