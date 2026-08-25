@@ -151,6 +151,17 @@ drop trigger if exists trg_key_envelope_immutable on public.conversation_key_env
 create trigger trg_key_envelope_immutable before update on public.conversation_key_envelopes
 for each row execute function public.app_key_envelope_immutable_guard();
 
+create table if not exists public.pending_conversation_rekeys (
+  conversation_id uuid primary key references public.conversations(id) on delete cascade,
+  team_id uuid not null references public.teams(id) on delete cascade,
+  prior_key_version integer not null check(prior_key_version>=0),
+  reason text not null check(reason in ('member_removed','coach_access_revoked')),
+  requested_by uuid not null references public.users(id),
+  requested_at timestamptz not null default now(),
+  last_error text
+);
+revoke all on table public.pending_conversation_rekeys from public,anonymous,authenticated;
+
 create or replace function public.app_join_code_create_v1_10_1(p_team uuid,p_user uuid,p_payload jsonb)
 returns jsonb
 language plpgsql
@@ -182,7 +193,9 @@ declare
   u uuid; payload jsonb:=coalesce(p_payload,'{}'::jsonb);
   v_team uuid; v_target uuid; v_object uuid; v_org uuid;
   v_expires integer; v_max_uses integer;
-  actor_role organization_role; target_role organization_role; new_role organization_role;
+  actor_role organization_role; target_role organization_role; new_role organization_role; prior_org_role organization_role;
+  delegated_result jsonb; affected_conversations jsonb:='[]'::jsonb;
+  v_conversation uuid; v_prior_version integer; v_key_version integer; v_expected integer; v_supplied integer; v_complete boolean;
 begin
   if pg_column_size(payload)>8388608 then raise exception 'request_payload_too_large'; end if;
   if p_action in ('team.create','team.state.update') then perform public.app_validate_team_record(coalesce(payload->'teamRecord','{}'::jsonb)); end if;
@@ -204,6 +217,49 @@ begin
   end if;
   if p_action in ('team.create','invitation.accept','join.redeem') then perform public.app_require_adult_attestation(); end if;
 
+  -- A rekey is an all-or-nothing epoch transition. Team administrators may rotate
+  -- affected direct conversations without being able to read their old history.
+  if p_action in ('conversation.rekey.status','conversation.rekey.put') then
+    u:=public.app_current_user_id(); v_team:=(payload->>'teamId')::uuid; v_conversation:=(payload->>'conversationId')::uuid;
+    v_prior_version:=coalesce((payload->>'priorKeyVersion')::integer,0);
+    if not public.app_is_coach(v_team,u) then raise exception 'coach_role_required' using errcode='42501'; end if;
+    if not exists(select 1 from public.conversations c where c.id=v_conversation and c.team_id=v_team) then raise exception 'conversation_not_on_team' using errcode='42501'; end if;
+    select pr.prior_key_version into v_expected from public.pending_conversation_rekeys pr where pr.conversation_id=v_conversation and pr.team_id=v_team for update;
+    if not found then
+      if p_action='conversation.rekey.status' then return jsonb_build_object('ok',true,'complete',true,'keyVersion',(select coalesce(max(e.key_version),0) from public.conversation_key_envelopes e where e.conversation_id=v_conversation)); end if;
+      raise exception 'rekey_not_required' using errcode='22023';
+    end if;
+    if v_prior_version<>v_expected then raise exception 'stale_rekey_task' using errcode='40001'; end if;
+    select coalesce(max(e.key_version),0) into v_expected from public.conversation_key_envelopes e where e.conversation_id=v_conversation;
+    if p_action='conversation.rekey.status' then
+      v_complete:=v_expected>v_prior_version and not exists(select 1 from public.conversation_members cm where cm.conversation_id=v_conversation and not exists(select 1 from public.conversation_key_envelopes e where e.conversation_id=v_conversation and e.recipient_user_id=cm.user_id and e.key_version=v_expected));
+      if v_complete then delete from public.pending_conversation_rekeys where conversation_id=v_conversation; end if;
+      return jsonb_build_object('ok',true,'complete',v_complete,'keyVersion',v_expected);
+    end if;
+    v_key_version:=(payload->>'keyVersion')::integer;
+    if v_key_version<>v_prior_version+1 then raise exception 'invalid_rekey_version' using errcode='22023'; end if;
+    if v_expected>v_prior_version then
+      if exists(select 1 from public.conversation_members cm where cm.conversation_id=v_conversation and not exists(select 1 from public.conversation_key_envelopes e where e.conversation_id=v_conversation and e.recipient_user_id=cm.user_id and e.key_version=v_expected)) then raise exception 'incomplete_existing_rekey'; end if;
+      delete from public.pending_conversation_rekeys where conversation_id=v_conversation;
+      return jsonb_build_object('ok',true,'alreadyRotated',true,'keyVersion',v_expected);
+    end if;
+    if v_expected<>v_prior_version then raise exception 'stale_rekey_version'; end if;
+    if exists(select 1 from public.conversation_members cm left join public.user_crypto_keys k on k.user_id=cm.user_id where cm.conversation_id=v_conversation and k.user_id is null) then raise exception 'member_crypto_key_missing'; end if;
+    select count(*) into v_expected from public.conversation_members cm where cm.conversation_id=v_conversation;
+    select count(distinct x.recipient_id) into v_supplied from (select (e->>'recipientUserId')::uuid recipient_id from jsonb_array_elements(coalesce(payload->'envelopes','[]'::jsonb)) e) x;
+    if v_expected=0 or v_supplied<>v_expected or jsonb_array_length(coalesce(payload->'envelopes','[]'::jsonb))<>v_expected or exists(select 1 from jsonb_array_elements(coalesce(payload->'envelopes','[]'::jsonb)) e where not exists(select 1 from public.conversation_members cm where cm.conversation_id=v_conversation and cm.user_id=(e->>'recipientUserId')::uuid)) then raise exception 'rekey_recipient_mismatch' using errcode='22023'; end if;
+    select public_key_jwk into delegated_result from public.user_crypto_keys where user_id=u; if delegated_result is null then raise exception 'sender_crypto_key_missing'; end if;
+    for delegated_result in select * from jsonb_array_elements(payload->'envelopes') loop
+      if length(coalesce(delegated_result->>'wrappedKey',''))>4096 or length(coalesce(delegated_result->>'nonce',''))>256 then raise exception 'invalid_key_envelope'; end if;
+      insert into public.conversation_key_envelopes(conversation_id,recipient_user_id,sender_user_id,sender_public_key_jwk,key_version,wrapped_key,nonce)
+      values(v_conversation,(delegated_result->>'recipientUserId')::uuid,u,(select public_key_jwk from public.user_crypto_keys where user_id=u),v_key_version,decode(delegated_result->>'wrappedKey','base64'),decode(delegated_result->>'nonce','base64'));
+    end loop;
+    select c.organization_id into v_org from public.conversations c where c.id=v_conversation;
+    insert into public.audit_events(organization_id,actor_user_id,action,entity_type,entity_id,metadata) values(v_org,u,'conversation.rekey','conversation',v_conversation::text,jsonb_build_object('teamId',v_team,'priorKeyVersion',v_prior_version,'keyVersion',v_key_version,'recipientCount',v_expected));
+    delete from public.pending_conversation_rekeys where conversation_id=v_conversation;
+    return jsonb_build_object('ok',true,'keyVersion',v_key_version);
+  end if;
+
   if p_action in ('team.create','form.create','invitation.create','join.create') then
     u:=public.app_current_user_id();
     if p_action='team.create' and (select count(*) from public.team_memberships tm where tm.user_id=u)>=25 then raise exception 'account_team_limit'; end if;
@@ -214,6 +270,14 @@ begin
   end if;
 
   if p_action in ('invitation.create','join.create') and coalesce(payload->>'role','guardian')='guardian' and nullif(payload->>'athleteClientKey','') is null then raise exception 'guardian_requires_athlete' using errcode='42501'; end if;
+
+  if p_action='invitation.create' and coalesce(payload->>'role','guardian')='guardian' then
+    v_team:=(payload->>'teamId')::uuid;
+    if not exists(
+      select 1 from public.roster_memberships rm join public.athlete_profiles ap on ap.id=rm.athlete_id
+      where rm.team_id=v_team and rm.status='active' and ap.client_key=payload->>'athleteClientKey'
+    ) then raise exception 'athlete_not_on_team' using errcode='42501'; end if;
+  end if;
 
   if p_action in ('invitation.create','join.create') then
     if coalesce(payload->>'expiresHours','') !~ '^[0-9]+$' then raise exception 'access_expiration_required' using errcode='22023'; end if;
@@ -241,8 +305,13 @@ begin
       where gr.guardian_user_id=v_target and rm.team_id=v_team
     ) then raise exception 'guardian_requires_athlete' using errcode='42501'; end if;
     if actor_role<>'owner' and (public.app_role_rank(actor_role)<=public.app_role_rank(target_role) or public.app_role_rank(actor_role)<=public.app_role_rank(new_role)) then raise exception 'role_change_not_allowed' using errcode='42501'; end if;
+    if target_role::text in ('owner','admin','coach','assistant_coach','manager') and new_role::text not in ('owner','admin','coach','assistant_coach','manager') then
+      select coalesce(jsonb_agg(jsonb_build_object('conversationId',q.id,'priorKeyVersion',q.prior_version)),'[]'::jsonb) into affected_conversations from (select c.id,coalesce(max(e.key_version),0) prior_version from public.conversations c join public.conversation_members cm on cm.conversation_id=c.id left join public.conversation_key_envelopes e on e.conversation_id=c.id where c.team_id=v_team and c.kind='coaches' and cm.user_id=v_target group by c.id) q;
+      delete from public.conversation_members cm using public.conversations c where cm.conversation_id=c.id and c.team_id=v_team and c.kind='coaches' and cm.user_id=v_target;
+      insert into public.pending_conversation_rekeys(conversation_id,team_id,prior_key_version,reason,requested_by) select (x->>'conversationId')::uuid,v_team,(x->>'priorKeyVersion')::integer,'coach_access_revoked',u from jsonb_array_elements(affected_conversations) x on conflict(conversation_id) do update set prior_key_version=least(pending_conversation_rekeys.prior_key_version,excluded.prior_key_version),requested_at=now(),requested_by=excluded.requested_by;
+    end if;
     update public.team_memberships tm set role=new_role where tm.team_id=v_team and tm.user_id=v_target;
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
+    return jsonb_build_object('ok',true,'rekeyRequired',jsonb_array_length(affected_conversations)>0,'affectedConversations',affected_conversations);
   end if;
 
   if p_action='member.remove' then
@@ -251,12 +320,14 @@ begin
     if target_role is null then raise exception 'not_a_team_member'; end if;
     if target_role='owner' then raise exception 'owner_role_protected' using errcode='42501'; end if;
     if v_target<>u and (actor_role is null or (actor_role<>'owner' and public.app_role_rank(actor_role)<=public.app_role_rank(target_role))) then raise exception 'member_remove_not_allowed' using errcode='42501'; end if;
+    select coalesce(jsonb_agg(jsonb_build_object('conversationId',q.id,'priorKeyVersion',q.prior_version)),'[]'::jsonb) into affected_conversations from (select c.id,coalesce(max(e.key_version),0) prior_version from public.conversations c join public.conversation_members cm on cm.conversation_id=c.id left join public.conversation_key_envelopes e on e.conversation_id=c.id where c.team_id=v_team and cm.user_id=v_target group by c.id) q;
     delete from public.conversation_members cm using public.conversations c where cm.conversation_id=c.id and c.team_id=v_team and cm.user_id=v_target;
+    insert into public.pending_conversation_rekeys(conversation_id,team_id,prior_key_version,reason,requested_by) select (x->>'conversationId')::uuid,v_team,(x->>'priorKeyVersion')::integer,'member_removed',u from jsonb_array_elements(affected_conversations) x on conflict(conversation_id) do update set prior_key_version=least(pending_conversation_rekeys.prior_key_version,excluded.prior_key_version),requested_at=now(),requested_by=excluded.requested_by;
     delete from public.guardian_relationships gr where gr.guardian_user_id=v_target and exists(select 1 from public.roster_memberships rm where rm.team_id=v_team and rm.athlete_id=gr.athlete_id);
     delete from public.team_memberships tm where tm.team_id=v_team and tm.user_id=v_target;
     select t.organization_id into v_org from public.teams t where t.id=v_team;
-    insert into public.audit_events(organization_id,actor_user_id,action,entity_type,entity_id,metadata) values(v_org,u,'team.member.remove','team_membership',v_target::text,jsonb_build_object('teamId',v_team,'rekeyRequired',true));
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
+    insert into public.audit_events(organization_id,actor_user_id,action,entity_type,entity_id,metadata) values(v_org,u,'team.member.remove','team_membership',v_target::text,jsonb_build_object('teamId',v_team,'rekeyRequired',jsonb_array_length(affected_conversations)>0,'affectedConversations',affected_conversations));
+    return jsonb_build_object('ok',true,'rekeyRequired',jsonb_array_length(affected_conversations)>0,'affectedConversations',affected_conversations);
   end if;
 
   if p_action='team.owner.transfer' then
@@ -265,7 +336,7 @@ begin
     if public.app_team_role(v_team,v_target) is null then raise exception 'target_not_team_member'; end if;
     update public.team_memberships tm set role='admin' where tm.team_id=v_team and tm.user_id=u;
     update public.team_memberships tm set role='owner' where tm.team_id=v_team and tm.user_id=v_target;
-    return jsonb_build_object('ok',true,'rekeyRequired',true);
+    return jsonb_build_object('ok',true,'rekeyRequired',false,'affectedConversations','[]'::jsonb);
   end if;
 
   if p_action='invitation.revoke' then
@@ -284,6 +355,34 @@ begin
     return jsonb_build_object('ok',true);
   end if;
 
+  if p_action='conversation.message.send' then
+    v_conversation:=(payload->>'conversationId')::uuid;
+    if exists(select 1 from public.pending_conversation_rekeys pr where pr.conversation_id=v_conversation) then raise exception 'conversation_rekey_pending' using errcode='55000'; end if;
+    select coalesce(max(e.key_version),0) into v_key_version from public.conversation_key_envelopes e where e.conversation_id=v_conversation;
+    if v_key_version>0 and coalesce(substring(payload->>'cryptoVersion' from 'v([0-9]+)$'),'0')::integer<>v_key_version then raise exception 'stale_message_key_version' using errcode='40001'; end if;
+  end if;
+
+  -- The legacy core mirrors team roles into organization membership. Preserve an
+  -- existing organization role and give new team invite/code recipients only the
+  -- non-administrative organization baseline so team access cannot escalate org access.
+  if p_action='invitation.accept' then
+    u:=public.app_current_user_id();
+    select t.organization_id into v_org from public.team_invitations ti join public.teams t on t.id=ti.team_id
+      where ti.token_hash=encode(digest(coalesce(payload->>'token',''),'sha256'),'hex') limit 1;
+    if v_org is not null then select om.role into prior_org_role from public.organization_memberships om where om.organization_id=v_org and om.user_id=u for update; end if;
+    delegated_result:=public.app_api_v1_10_core(p_action,payload);
+    if v_org is not null then update public.organization_memberships set role=coalesce(prior_org_role,'readonly') where organization_id=v_org and user_id=u; end if;
+    return delegated_result;
+  end if;
+  if p_action='join.redeem' then
+    u:=public.app_current_user_id();
+    select t.organization_id into v_org from public.team_join_codes jc join public.teams t on t.id=jc.team_id
+      where jc.code_hash=encode(digest(upper(regexp_replace(coalesce(payload->>'code',''),'[^A-Z0-9]','','g')),'sha256'),'hex') limit 1;
+    if v_org is not null then select om.role into prior_org_role from public.organization_memberships om where om.organization_id=v_org and om.user_id=u for update; end if;
+    delegated_result:=public.app_api_v1_10_core(p_action,payload);
+    if v_org is not null then update public.organization_memberships set role=coalesce(prior_org_role,'readonly') where organization_id=v_org and user_id=u; end if;
+    return delegated_result;
+  end if;
   return public.app_api_v1_10_core(p_action,payload);
 end $$;
 

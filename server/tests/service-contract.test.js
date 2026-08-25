@@ -14,6 +14,17 @@ test('service routes and production boundaries exist',()=>{
   assert.match(invites,/token_hash/);assert.match(invites,/code_hash/);assert.doesNotMatch(invites,/insert into team_invitations[^\n]+token[,)]/i);
 });
 
+test('Express access grants are team-scoped and guardian links require an active team athlete',()=>{
+  const auth=read('server/src/auth.js'),invites=read('server/src/routes-invites.js');
+  assert.match(auth,/requireEmailVerification:true/);
+  assert.match(invites,/r\.team_id=\$1 and r\.status='active'/);
+  assert.match(invites,/guardian_requires_athlete/);
+  assert.match(invites,/z\.literal\('guardian'\)/);
+  assert.match(invites,/maxUses:z\.number\(\)\.int\(\)\.min\(1\)\.max\(10\)/);
+  assert.match(invites,/organization_memberships\(organization_id,user_id,role\) values\(\$1,\$2,'readonly'\) on conflict\(organization_id,user_id\) do nothing/);
+  assert.doesNotMatch(invites,/organization_memberships[\s\S]{0,240}app_role_rank|organization_memberships[\s\S]{0,300}then excluded\.role/);
+});
+
 test('messages are ciphertext-only and notifications do not expose content',()=>{
   const messaging=read('server/src/routes-messaging.js'),schema=read('schema.sql');
   assert.match(schema,/ciphertext bytea not null/);assert.match(schema,/nonce bytea not null/);assert.doesNotMatch(schema,/messages[\s\S]{0,500}\bplaintext\b/i);

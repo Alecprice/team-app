@@ -17,7 +17,7 @@ test('V1.10.1 database hardening migration preserves one client RPC and adds lif
     "p_action='invitation.revoke'","p_action='join.revoke'",'request_payload_too_large',
     'app_validate_team_record','idx_messages_conversation_cursor','access_expiration_required','join_code_uses_out_of_range',
     'app_join_code_create_v1_10_1',"substr(encode(gen_random_bytes(8),'hex'),1,12)",'adult_attested_at','account.adult.attest','app_require_adult_attestation',
-    'alter default privileges in schema public revoke execute on functions from public'
+    'alter default privileges in schema public revoke execute on functions from public',"rm.status='active'",'prior_org_role',"coalesce(prior_org_role,'readonly')"
   ]) assert.ok(sql.includes(token),`missing hardening contract: ${token}`);
   assert.match(sql,/revoke all on function public\.app_api_v1_10_core\(text,jsonb\) from authenticated/i);
   assert.match(sql,/grant execute on function public\.app_api\(text,jsonb\) to authenticated/i);
@@ -43,6 +43,23 @@ test('cloud admin hardening uses the documented recovery adapter and access life
   assert.match(source,/SupabaseAuthAdapter/);
   assert.match(source,/resetPasswordForEmail/);
   for(const action of ['member.role.update','member.remove','team.owner.transfer','invitation.revoke'])assert.ok(source.includes(action),`missing cloud admin action ${action}`);
+});
+
+test('membership removal and coach downgrade require complete retryable E2EE epoch rotation',()=>{
+  const sql=read('sql/upgrade-v1.10-to-v1.10.1-hardening.sql'),client=read('client/cloud-admin-hardening.js');
+  for(const token of [
+    "p_action in ('conversation.rekey.status','conversation.rekey.put')",'invalid_rekey_version',
+    'rekey_recipient_mismatch','member_crypto_key_missing','incomplete_existing_rekey','pending_conversation_rekeys',
+    "'affectedConversations',affected_conversations","c.kind='coaches'",
+    "'conversation.rekey'",'priorKeyVersion','recipientCount','stale_message_key_version','conversation_rekey_pending'
+  ])assert.ok(sql.includes(token),`missing E2EE rekey database contract: ${token}`);
+  assert.match(sql,/v_key_version<>v_prior_version\+1/,'rotation must advance exactly one monotonic epoch');
+  assert.match(sql,/revoke all on table public\.pending_conversation_rekeys/,'pending security work must not be client-readable or mutable directly');
+  assert.match(sql,/delete from public\.conversation_members[\s\S]*delete from public\.team_memberships/,'conversation access must be revoked before team access');
+  for(const token of ['pending-rekeys','rememberRekeys','rotatePendingRekeys','conversation.rekey.status','conversation.rekey.put','member.public_key_jwk','lastAttemptAt'])assert.ok(client.includes(token),`missing retryable rekey client contract: ${token}`);
+  assert.match(client,/await finishSecurityChange\(result\)/,'security changes must not be presented as complete before rotation');
+  assert.match(client,/role="alert"/,'pending rotation must remain visibly actionable');
+  assert.match(read('client/cloud-entry.js'),/const latest=await getConversationKey\(conv\)/,'senders must refresh the active epoch before encrypting');
 });
 
 test('mobile invite sharing and cryptographic identifier hardening are present',()=>{
