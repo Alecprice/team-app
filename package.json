@@ -16,7 +16,8 @@
     "build:cloudflare": "node scripts/build-cloudflare.js",
     "verify:release": "npm run build && node scripts/verify-release.mjs",
     "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir .wrangler-dry-run",
-    "smoke:prod": "node scripts/smoke-production.mjs"
+    "smoke:prod": "node scripts/smoke-production.mjs",
+    "gate": "bash scripts/local-release-gate.sh"
   },
   "dependencies": {
     "@neondatabase/neon-js": "0.7.0-beta"
