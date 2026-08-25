@@ -1,8 +1,11 @@
-const test=require('node:test');
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const path=require('node:path');
-const ROOT=path.resolve(__dirname,'../..');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const here=path.dirname(fileURLToPath(import.meta.url));
+const ROOT=path.resolve(here,'../..');
 const read=p=>fs.readFileSync(path.join(ROOT,p),'utf8');
 
 test('V1.10.1 database hardening migration preserves one client RPC and adds lifecycle guards',()=>{

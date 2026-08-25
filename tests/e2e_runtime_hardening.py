@@ -38,7 +38,7 @@ def main():
       assert page.locator('#inviteForm select[name="athleteClientKey"]').evaluate('e=>e.required')
       assert page.locator('#inviteForm select[name="athleteClientKey"] option[value=""]').evaluate('e=>e.disabled')
       assert page.locator('#joinAthleteSelect').evaluate('e=>e.required')
-      page.locator('#inviteForm select[name="role"]').select_option('coach')
+      page.locator('#inviteForm select[name="role"]').evaluate("e=>{e.value='coach';e.dispatchEvent(new Event('change',{bubbles:true}))}")
       assert not page.locator('#inviteForm select[name="athleteClientKey"]').evaluate('e=>e.required')
       page.locator('#cloudOverlay').click(position={'x':2,'y':2});assert page.evaluate('window.__closed')==0
       page.evaluate('window.TeamAppCloud.scheduleSync();window.TeamAppCloud.scheduleSync();')

@@ -23,7 +23,8 @@ def main():
         }
         page.evaluate("(s)=>localStorage.setItem('team-app-service-v1.10-state',JSON.stringify(s))",state)
         page.reload()
-        page.locator('[data-nav="coach"]').click()
+        page.locator('#settingsBtn').click()
+        page.locator('.coach-readiness').wait_for()
         assert page.locator('a[href^="javascript:"]').count()==0
         assert page.locator('img[src^="data:text/html"]').count()==0
         top_style=page.locator('.topbar').get_attribute('style') or ''

@@ -16,7 +16,8 @@ test('offline queue preserves account ownership and optimistic base revision',()
 });
 
 test('login hydration does not overwrite teams with queued local changes',()=>{
-  assert.match(source,/const queued=new Map\(await queuedRows\(\)\),cloudTeams=\[\]/);
+  assert.match(source,/const queued=new Map\(await queuedRows\(\)\)/);
+  assert.match(source,/const cloudTeams=slots\.filter\(Boolean\)/);
   assert.match(source,/if\(queued\.size\)\{for\(const detail of cloudTeams\)if\(!queued\.has\(detail\.id\)\)runtime\?\.replaceOneCloudTeam\?\.\(detail\);\}/);
   assert.match(source,/reason:'queued_revision_missing'/);
 });
