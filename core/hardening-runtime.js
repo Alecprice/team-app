@@ -7,7 +7,7 @@
   const ACCOUNT_MARKER='team-app-last-auth-user';
   const channel=('BroadcastChannel' in root)?new BroadcastChannel('team-app-v1.10'):null;
   const rawStorage=root.Storage?.prototype?{get:root.Storage.prototype.getItem,set:root.Storage.prototype.setItem,remove:root.Storage.prototype.removeItem}:null;
-  let focusReturn=null,filterSeq=0,syncPatched=false,reloadForAccount=false;
+  let focusReturn=null,focusReturnId='',activeDialog=null,filterSeq=0,syncPatched=false,reloadForAccount=false;
 
   function dispatch(name,detail={}){try{root.dispatchEvent(new CustomEvent(name,{detail}));}catch{}}
   function hash(value){const text=JSON.stringify(value);let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}return `${text.length}:${(h>>>0).toString(16)}`;}
@@ -52,6 +52,22 @@
     scope.querySelectorAll?.('.toast').forEach(el=>{el.setAttribute('role','status');el.setAttribute('aria-live','polite');});
   }
 
+  function prepareDialog(dialog){
+    if(!dialog||dialog.dataset.teamappDialogReady==='1')return;
+    dialog.dataset.teamappDialogReady='1';
+    const heading=dialog.querySelector('h1,h2,h3');
+    if(heading&&!dialog.hasAttribute('aria-labelledby')){
+      if(!heading.id)heading.id=`teamappDialogTitle${++filterSeq}`;
+      dialog.setAttribute('aria-labelledby',heading.id);
+      dialog.removeAttribute('aria-label');
+    }
+    requestAnimationFrame(()=>{
+      if(!dialog.isConnected)return;
+      const preferred=dialog.querySelector('[autofocus],input:not([type="hidden"]):not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href]');
+      if(preferred&&!dialog.contains(document.activeElement))preferred.focus({preventScroll:true});
+    });
+  }
+
   function addListFilter(list,label){
     if(list.dataset.teamappFilter==='1'||list.children.length<12)return;list.dataset.teamappFilter='1';const input=document.createElement('input');input.type='search';input.className='teamapp-list-filter';input.placeholder=`Search ${label}…`;input.setAttribute('aria-label',`Search ${label}`);input.addEventListener('input',()=>{const q=input.value.trim().toLowerCase();[...list.children].forEach(row=>{row.hidden=Boolean(q&&!row.textContent.toLowerCase().includes(q));});});list.parentNode.insertBefore(input,list);
   }
@@ -75,6 +91,7 @@
   document.addEventListener('keydown',event=>{const modal=document.querySelector('.modal,.cloud-sheet');if(event.key==='Tab'&&modal){const items=focusables(modal);if(!items.length)return;const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}if(event.key==='Escape'&&document.body.classList.contains('teamapp-auth-locked')&&document.getElementById('cloudOverlay')){event.preventDefault();event.stopImmediatePropagation();}},true);
 
   document.addEventListener('click',event=>{
+    const trigger=event.target.closest?.('button,a[href],[tabindex]');if(trigger&&!document.querySelector('.modal,.cloud-sheet')){focusReturn=trigger;focusReturnId=trigger.id||'';}
     const overlay=event.target.closest?.('#cloudOverlay');if(overlay&&event.target===overlay&&document.body.classList.contains('teamapp-auth-locked')){event.preventDefault();event.stopImmediatePropagation();return;}
     const locationButton=event.target.closest?.('#useTeamLocationBtn,[data-event-location]');if(locationButton&&!locationButton.dataset.locationConfirmed){const ok=root.confirm('Use this phone’s current location? The saved venue/location may be shared with authorized team members.');if(!ok){event.preventDefault();event.stopImmediatePropagation();return;}locationButton.dataset.locationConfirmed='1';queueMicrotask(()=>delete locationButton.dataset.locationConfirmed);}
   },true);
@@ -83,7 +100,7 @@
     if(syncPatched||!root.TeamAppCloud?.scheduleSync||!root.TeamAppRuntime?.getActiveCloudPayload)return;const original=root.TeamAppCloud.scheduleSync.bind(root.TeamAppCloud),lastByTeam=new Map();root.TeamAppCloud.scheduleSync=function(){const payload=root.TeamAppRuntime?.getActiveCloudPayload?.();if(!payload)return original();const key=payload.teamRecord?.remoteId||payload.teamRecord?.id||'active';const next=hash(payload);if(root.navigator?.onLine!==false&&lastByTeam.get(key)===next)return;lastByTeam.set(key,next);return original();};syncPatched=true;
   }
 
-  const observer=new MutationObserver(records=>{for(const record of records){for(const node of record.addedNodes){if(node.nodeType!==1)continue;if(node.matches?.('.modal,.cloud-sheet')&&!focusReturn)focusReturn=document.activeElement;hardenDynamicUi(node);}}if(!document.querySelector('.modal,.cloud-sheet')&&focusReturn){const target=focusReturn;focusReturn=null;if(target?.isConnected)target.focus();}if(!reloadForAccount){updateAuthLock();patchSyncScheduler();}});
+  const observer=new MutationObserver(records=>{for(const record of records){for(const node of record.addedNodes){if(node.nodeType!==1)continue;hardenDynamicUi(node);}}const dialog=document.querySelector('.cloud-sheet,.modal');if(dialog!==activeDialog){if(dialog){if(!activeDialog&&!focusReturn)focusReturn=document.activeElement;activeDialog=dialog;prepareDialog(dialog);}else{activeDialog=null;const target=focusReturn?.isConnected?focusReturn:(focusReturnId?document.getElementById(focusReturnId):null);focusReturn=null;focusReturnId='';if(target?.isConnected)target.focus({preventScroll:true});}}if(!reloadForAccount){updateAuthLock();patchSyncScheduler();}});
 
   function start(){hardenDynamicUi(document);updateAuthLock();patchSyncScheduler();observer.observe(document.body,{childList:true,subtree:true});root.setInterval(()=>{if(!reloadForAccount){updateAuthLock();patchSyncScheduler();}},1500);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();

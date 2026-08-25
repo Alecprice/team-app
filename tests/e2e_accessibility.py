@@ -33,6 +33,12 @@ def main():
       for nav in ['roster','lineup','practice','schedule','learn']:
         page.locator(f'[data-nav="{nav}"]').click();audit(page,nav)
       page.locator('[data-nav="roster"]').click();page.locator('#addPlayerBtn').click();audit(page,'player modal');page.locator('#cancelModal').click()
+      page.locator('#addPlayerBtn').focus();page.locator('#addPlayerBtn').click()
+      dialog=page.locator('.modal[role="dialog"]')
+      assert dialog.get_attribute('aria-labelledby'), 'dialog must be named by its visible heading'
+      assert dialog.evaluate('(el)=>el.contains(document.activeElement)'), 'focus must move into an opened dialog'
+      page.keyboard.press('Shift+Tab');assert dialog.evaluate('(el)=>el.contains(document.activeElement)'), 'focus must remain trapped in dialog'
+      page.keyboard.press('Escape');assert page.locator('#addPlayerBtn').evaluate('(el)=>el===document.activeElement'), 'focus must return to dialog trigger'
       page.locator('[data-nav="schedule"]').click();page.locator('#addEventBtn').click();audit(page,'event modal');page.locator('#cancelModal').click()
       page.locator('#settingsBtn').click();audit(page,'coach center')
       page.locator('#cancelModal').click() if page.locator('#cancelModal').count() else None
