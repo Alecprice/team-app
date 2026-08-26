@@ -13,7 +13,12 @@
     "build:client": "node server/scripts/build-client.js",
     "test": "bash tests/run-all.sh && node --test server/tests/*.test.js",
     "test:service": "node --test server/tests/*.test.js",
-    "build:cloudflare": "node scripts/build-cloudflare.js"
+    "build:cloudflare": "node scripts/build-cloudflare.js",
+    "verify:release": "npm run build && node scripts/verify-release.mjs",
+    "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir .wrangler-dry-run",
+    "smoke:prod": "node scripts/smoke-production.mjs",
+    "gate": "bash scripts/local-release-gate.sh",
+    "safe-push": "bash scripts/safe-push.sh"
   },
   "dependencies": {
     "@neondatabase/neon-js": "0.7.0-beta"

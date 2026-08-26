@@ -1,0 +1,125 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const here=path.dirname(fileURLToPath(import.meta.url));
+const ROOT=path.resolve(here,'../..');
+const read=p=>fs.readFileSync(path.join(ROOT,p),'utf8');
+
+test('V1.10.1 database hardening migration preserves one client RPC and adds lifecycle guards',()=>{
+  const sql=read('sql/upgrade-v1.10-to-v1.10.1-hardening.sql');
+  for(const token of [
+    'app_api_v1_10_core','app_require_verified_email','trg_team_membership_verified_email',
+    "jsonb_set(v,'{documents}','[]'::jsonb,true)",'trg_key_envelope_immutable',
+    "p_action='member.remove'","p_action='member.role.update'","p_action='team.owner.transfer'",
+    "p_action='invitation.revoke'","p_action='join.revoke'",'request_payload_too_large',
+    'app_validate_team_record','idx_messages_conversation_cursor','access_expiration_required','join_code_uses_out_of_range',
+    'app_join_code_create_v1_10_1',"substr(encode(gen_random_bytes(8),'hex'),1,12)",'adult_attested_at','account.adult.attest','app_require_adult_attestation',
+    'alter default privileges in schema public revoke execute on functions from public',"rm.status='active'",'prior_org_role',"coalesce(prior_org_role,'readonly')"
+  ]) assert.ok(sql.includes(token),`missing hardening contract: ${token}`);
+  assert.match(sql,/revoke all on function public\.app_api_v1_10_core\(text,jsonb\) from authenticated/i);
+  assert.match(sql,/grant execute on function public\.app_api\(text,jsonb\) to authenticated/i);
+  assert.doesNotMatch(sql,/\bteam_id\s*=\s*team_id\b/i,'migration must not contain ambiguous self-comparison predicates');
+  assert.doesNotMatch(sql,/\buser_id\s*=\s*user_id\b/i,'migration must not contain ambiguous user self-comparison predicates');
+});
+
+test('runtime hardening is loaded before main app and sensitive PWA navigation is normalized',()=>{
+  const html=read('index.html'),sw=read('sw.js'),runtime=read('core/hardening-runtime.js');
+  assert.ok(html.indexOf('./core/hardening-runtime.js')<html.indexOf('./app.js'));
+  assert.ok(sw.includes("url.searchParams.has('invite')"));
+  assert.ok(sw.includes("const SHELL_KEY='./index.html'"));
+  assert.ok(runtime.includes("DEMO_PREFIX='team-app-demo:'"));
+  assert.ok(runtime.includes('team-app-account:'));
+  assert.ok(runtime.includes('migrateUnclaimedState'));
+  assert.ok(runtime.includes('teamapp-auth-locked'));
+  assert.ok(runtime.includes('teamapp:storage-failure'));
+  assert.ok(runtime.includes('BroadcastChannel'));
+  for(const token of ['tabAccount','lockForExternalAccountChange',"event.key===ACCOUNT_MARKER","event.data?.type==='account-change'","document.body.classList.add('teamapp-auth-locked')"]){
+    assert.ok(runtime.includes(token),`missing stale-tab account isolation contract: ${token}`);
+  }
+  assert.match(runtime,/storageNamespace\(\)[\s\S]*tabAccount\|\|rawGet\(ACCOUNT_MARKER\)/,'state namespace must stay pinned to the tab account during cross-tab account changes');
+});
+
+test('cloud admin hardening uses the documented recovery adapter and access lifecycle RPCs',()=>{
+  const source=read('client/cloud-admin-hardening.js');
+  assert.match(source,/SupabaseAuthAdapter/);
+  assert.match(source,/resetPasswordForEmail/);
+  for(const action of ['member.role.update','member.remove','team.owner.transfer','invitation.revoke'])assert.ok(source.includes(action),`missing cloud admin action ${action}`);
+});
+
+test('membership removal and coach downgrade require complete retryable E2EE epoch rotation',()=>{
+  const sql=read('sql/upgrade-v1.10-to-v1.10.1-hardening.sql'),client=read('client/cloud-admin-hardening.js');
+  for(const token of [
+    "p_action in ('conversation.rekey.status','conversation.rekey.put')",'invalid_rekey_version',
+    'rekey_recipient_mismatch','member_crypto_key_missing','incomplete_existing_rekey','pending_conversation_rekeys',
+    "'affectedConversations',affected_conversations","c.kind='coaches'",
+    "'conversation.rekey'",'priorKeyVersion','recipientCount','stale_message_key_version','conversation_rekey_pending'
+  ])assert.ok(sql.includes(token),`missing E2EE rekey database contract: ${token}`);
+  assert.match(sql,/v_key_version<>v_prior_version\+1/,'rotation must advance exactly one monotonic epoch');
+  assert.match(sql,/revoke all on table public\.pending_conversation_rekeys/,'pending security work must not be client-readable or mutable directly');
+  assert.match(sql,/delete from public\.conversation_members[\s\S]*delete from public\.team_memberships/,'conversation access must be revoked before team access');
+  for(const token of ['pending-rekeys','rememberRekeys','rotatePendingRekeys','conversation.rekey.status','conversation.rekey.put','member.public_key_jwk','lastAttemptAt'])assert.ok(client.includes(token),`missing retryable rekey client contract: ${token}`);
+  assert.match(client,/await finishSecurityChange\(result\)/,'security changes must not be presented as complete before rotation');
+  assert.match(client,/role="alert"/,'pending rotation must remain visibly actionable');
+  assert.match(read('client/cloud-entry.js'),/const latest=await getConversationKey\(conv\)/,'senders must refresh the active epoch before encrypting');
+});
+
+test('mobile invite sharing and cryptographic identifier hardening are present',()=>{
+  const cloud=read('client/cloud-entry.js'),app=read('app.js'),headers=read('_headers');
+  for(const token of ['textInviteLink','navigator.share','Text invite','Copy link','inviteShareResult'])assert.ok(cloud.includes(token),`missing invite-sharing contract: ${token}`);
+  assert.doesNotMatch(app,/Math\.random\s*\(/,'application identifiers must not fall back to Math.random');
+  assert.match(app,/crypto\?\.getRandomValues/);
+  assert.match(app,/safeHttpsUrl/);
+  assert.match(headers,/Cross-Origin-Resource-Policy:\s*same-origin/i);
+  assert.match(headers,/X-Permitted-Cross-Domain-Policies:\s*none/i);
+  assert.match(headers,/\/build-info\.json[\s\S]*Cache-Control:\s*no-store/i);
+});
+
+test('Little League guidance handles same-day division restrictions conservatively',()=>{
+  const app=read('app.js');
+  assert.match(app,/llb-\(minor\|major\|intermediate\)/);
+  assert.match(app,/age12JuniorSenior/);
+  assert.match(app,/sameDayThresholdReview/);
+  assert.match(app,/combinedToday/);
+  assert.match(app,/catcher\/pitcher restrictions/);
+});
+
+test('cloud hydration is bounded instead of serial across every team',()=>{
+  const cloud=read('client/cloud-entry.js');
+  assert.match(cloud,/Math\.min\(4,orderedTeams\.length\)/);
+  assert.match(cloud,/Promise\.all\(Array\.from/);
+  assert.match(cloud,/activeId=activeRemoteId\(\)/);
+});
+
+
+test('social auth is feature-gated and preserves invite callback state',()=>{
+  const cloud=read('client/cloud-entry.js'),build=read('scripts/build-cloudflare.js'),css=read('styles.css');
+  for(const token of [
+    '__TEAM_APP_SOCIAL_PROVIDERS__','signIn.social','socialCallbackURL',
+    'Continue with Google','Continue with Apple','Continue with Facebook','Continue with Microsoft'
+  ]) assert.ok(cloud.includes(token),`missing social auth contract: ${token}`);
+  assert.match(cloud,/SOCIAL_PROVIDER_IDS\.includes\(provider\)/);
+  assert.match(cloud,/u\.searchParams\.delete\('error'\)/);
+  assert.match(build,/TEAM_APP_SOCIAL_PROVIDERS/);
+  assert.match(cloud,/account\.adult\.attest/);
+  assert.match(cloud,/requireAdultAccount/);
+  assert.match(cloud,/showAdultAttestation/);
+  assert.match(build,/google','apple','facebook','microsoft/);
+  assert.match(css,/\.cloud-social-auth/);
+  assert.match(css,/\.social-apple/);
+  assert.match(css,/\.social-facebook/);
+});
+
+test('release build has environment-specific endpoints, serialized sync, safer messaging, and build identity',()=>{
+  const build=read('scripts/build-cloudflare.js'),smoke=read('scripts/smoke-production.mjs');
+  for(const token of [
+    'TEAM_APP_NEON_AUTH_URL','TEAM_APP_NEON_DATA_API_URL','build-info.json',
+    'Message was not sent. Your draft is still here.','syncTail=Promise.resolve()',
+    "document.visibilityState==='visible'",'setInterval(poll,8000)',
+    "coach||coachRoles.has(m.role)"
+  ]) assert.ok(build.includes(token),`missing release build hardening: ${token}`);
+  assert.ok(smoke.includes("'/build-info.json'"));
+  assert.ok(smoke.includes('TEAM_APP_EXPECT_COMMIT'));
+});

@@ -21,18 +21,34 @@
 - weather-change monitoring
 - guardian event availability
 - Little League Baseball age-based pitch/rest guidance
-- production Docker/deployment scripts
+- Cloudflare Pages/Workers configuration
+- committed dependency lockfile and reproducible `npm ci` path
+- live Neon main upgraded to the V1.10 release-candidate schema
+- automated release-consistency verifier
+- phone-friendly GitHub production smoke workflow
 
 ## Release gates before real-family launch
 
-- materialize the exact V1.10 source in GitHub and generate/commit `package-lock.json`
-- deploy the candidate to Cloudflare Pages over HTTPS and verify real response headers
-- apply the QA-verified Neon V1.10 upgrade to staging before production
-- complete real Neon Auth/Data API HTTP tests
-- complete two-device concurrency and offline/reconnect tests
-- decide E2EE lost-device recovery requirements
-- decide whether coach-private notes require client-side encryption
-- validate closed-app Web Push before enabling it for families
+Completed engineering gates:
+
+- [x] materialize the exact V1.10 source in GitHub
+- [x] generate and commit `package-lock.json`
+- [x] apply the QA-verified Neon V1.10 schema to live main
+- [x] verify live main and the release-candidate schema have no schema diff
+- [x] verify only `app_api` is client-executable among `app_*` RPCs
+- [x] verify authenticated/anonymous roles have no direct public-table grants
+- [x] add reproducible GitHub CI and release-build verification
+- [x] add a public production smoke workflow
+
+Remaining staging gates:
+
+- [ ] verify the actual Cloudflare Pages deployment over HTTPS
+- [ ] complete PWA install/offline/reconnect/service-worker-upgrade tests
+- [ ] complete real Neon Auth/Data API HTTP tests
+- [ ] complete two-device concurrency tests
+- [ ] decide E2EE lost-device recovery requirements
+- [ ] decide whether coach-private notes require client-side encryption
+- [ ] validate closed-app Web Push before enabling it for families
 
 ## Next normalization pass
 

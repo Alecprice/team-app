@@ -1,0 +1,8 @@
+.connectivity-chip{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 10px;border:1px solid rgba(15,76,58,.16);border-radius:999px;background:rgba(255,255,255,.78);color:#17372f;font-size:12px;font-weight:800;line-height:1;white-space:nowrap;box-shadow:0 1px 0 rgba(15,76,58,.04)}
+.connectivity-dot{width:8px;height:8px;border-radius:50%;background:#2f855a;box-shadow:0 0 0 3px rgba(47,133,90,.12)}
+.connectivity-chip[data-state="pending"]{border-color:rgba(180,120,0,.24);background:rgba(255,248,224,.92);color:#725100}
+.connectivity-chip[data-state="pending"] .connectivity-dot{background:#c68a00;box-shadow:0 0 0 3px rgba(198,138,0,.13)}
+.connectivity-chip[data-state="offline"]{border-color:rgba(165,50,50,.24);background:rgba(255,239,239,.94);color:#7f2f2f}
+.connectivity-chip[data-state="offline"] .connectivity-dot{background:#c24141;box-shadow:0 0 0 3px rgba(194,65,65,.13)}
+@media (max-width:760px){.connectivity-chip{width:34px;min-width:34px;padding:0;justify-content:center}.connectivity-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}}
+@media (prefers-reduced-motion:reduce){.connectivity-chip,.connectivity-dot{transition:none}}

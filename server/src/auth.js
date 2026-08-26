@@ -21,7 +21,7 @@ export const auth=betterAuth({
   database:authPool,
   baseURL:config.authUrl,
   trustedOrigins:config.trustedOrigins,
-  emailAndPassword:{enabled:true,requireEmailVerification:false,minPasswordLength:10},
+  emailAndPassword:{enabled:true,requireEmailVerification:true,minPasswordLength:10},
   session:{expiresIn:60*60*24*30,updateAge:60*60*24},
   rateLimit:{enabled:true,window:60,max:100},
   plugins:[

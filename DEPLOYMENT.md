@@ -1,108 +1,167 @@
-# Team APP V1.8 Deployment
+# Team APP V1.10 Deployment
 
-## Production components
+## Production architecture
 
-- Mobile-first PWA / static assets served by the Node service
-- Express API
-- PostgreSQL / Neon
-- Self-hosted Better Auth adapter for adult accounts and passkeys
-- S3-compatible private object storage for team documents
-- Web Push using VAPID
-- NWS forecast/alert monitoring cron
-- App-layer encryption key for coach-private state and drawn signatures
-- Client-side E2EE for private message bodies
+The primary V1.10 deployment path is:
 
-## 1. Install and build
+- **Cloudflare Pages** for the static/mobile-first PWA
+- **Neon Auth** for adult coach/staff/guardian sessions
+- **Neon Data API** for browser-to-Postgres application RPC access
+- **Cloudflare Worker `team-app-jobs`** for scheduled/background notification work once its production providers/secrets are enabled
+- **National Weather Service** public APIs for forecast data
+- **client-side E2EE** for private message bodies
 
-```bash
-npm install
-npm run build
-```
+The older Node/Express service remains in the repository as a compatibility/hardening reference. It is not the primary Cloudflare Pages runtime described below.
 
-`cloud-client.js` is generated during the build. Do not rely on the fallback file checked into the source package for a production deployment.
+## 1. Reproducible install
 
-## 2. Database
-
-For a completely fresh database:
+Use the committed lockfile:
 
 ```bash
-npm run db:bootstrap
+npm ci
 ```
 
-For an existing Team APP database that already has the V1.7/core tables:
+Do not replace the release install with a floating dependency install.
+
+## 2. Regression + release gate
+
+Install the pinned browser-test tooling when needed:
 
 ```bash
-npm run db:service
-npm run db:seed
+python3 -m pip install -r requirements-dev.txt
+python3 -m playwright install chromium
 ```
 
-`db:seed` idempotently loads the six sport adapter metadata and all 183 competition profiles.
-
-The V1.8 service uses an optimistic-revision team snapshot during the migration from the prototype. More relational sport/event tables remain in `schema.sql` for the next normalization stage.
-
-## 3. Authentication
-
-The production source defaults to self-hosted Better Auth because Team APP currently enables the passkey plugin. Run:
+Then run:
 
 ```bash
-npm run auth:migrate
+npm test
+npm run verify:release
 ```
 
-The auth database connection is automatically scoped to the separate `auth` schema. Child athletes do not register; adult coaches, staff, and guardians authenticate.
+The release verifier builds `dist/` and checks lockfile alignment, service-worker versioning/precache assets, PWA manifest icons, Wrangler Pages settings, production cloud bundle generation, and baseline `_headers` security contracts.
 
-A managed Neon Auth instance may also be provisioned on the same Neon project, but it is not used by this build's passkey adapter. Keep one identity provider authoritative per deployment.
+## 3. Cloudflare Pages
 
-## 4. Required environment
+Project configuration:
 
-Copy `.env.example` to your hosting provider's secret/environment settings. In production you need at minimum:
+- project name: `team-app`
+- production branch: `main`
+- build command: `npm run build`
+- build output directory: `dist`
+- source config: `wrangler.jsonc`
 
-- `DATABASE_URL`
-- `BETTER_AUTH_SECRET` (32+ chars)
-- `BETTER_AUTH_URL`
-- `BETTER_AUTH_TRUSTED_ORIGINS`
-- `TEAM_APP_DATA_KEY`
-- non-local `STORAGE_PROVIDER` and object-storage settings
-- `CRON_SECRET`
+The build produces a bundled `dist/cloud-client.js` from `client/cloud-entry.js`. The tiny checked-in root `cloud-client.js` is only a development fallback and must never be treated as the production cloud bundle.
 
-For email invitations/magic links, configure `RESEND_API_KEY` and `EMAIL_FROM`.
+`dist/` also contains the main PWA shell, service worker, manifest, core runtime modules, icons, and `_headers`.
 
-For Web Push:
+## 4. Required static response headers
 
-```bash
-npm run push:keys
-```
+Cloudflare Pages should honor the repository `_headers` file copied into `dist/` during build. The current release requires at least:
 
-Store the generated public/private keys in `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`.
+- Content Security Policy
+- HSTS
+- `X-Content-Type-Options: nosniff`
+- anti-framing protection
+- referrer policy
+- permissions policy
 
-## 5. Private object storage
+`/sw.js` and `/index.html` are configured for prompt revalidation so an old application shell is less likely to remain pinned after a release.
 
-Production refuses `STORAGE_PROVIDER=local`. Configure an S3-compatible private bucket. Team APP uses signed PUT/GET URLs and server-side encryption. If `S3_KMS_KEY_ID` is supplied it requests SSE-KMS; otherwise it requests AES-256 server-side encryption.
+## 5. Neon
 
-Do not make the document bucket public.
+Neon project: `team-app`.
 
-## 6. Weather monitor
+The V1.10 live main schema has been verified to match the release-candidate schema. Client authorization follows the consolidated Data API model:
 
-Call this endpoint on a schedule using your host's cron/scheduler:
+- authenticated clients execute `app_api(text,jsonb)`
+- internal/legacy `app_*` helper functions are not client-executable
+- authenticated/anonymous roles have no direct CRUD grants on public application tables
+
+The browser client is configured with the Neon Auth and Data API endpoints in `client/cloud-entry.js`.
+
+## 6. Neon Auth trusted origin
+
+Do not guess or pre-authorize unrelated origins.
+
+After the final Cloudflare Pages production URL is successfully deployed and verified, add only that canonical HTTPS origin to the Neon Auth trusted-origin configuration.
+
+Then test real signup/sign-in/session-expiry and cross-role flows from that exact origin.
+
+## 7. Public production smoke
+
+The repository includes a phone-friendly GitHub Action:
+
+**Actions -> Production Smoke -> Run workflow**
+
+Default target:
 
 ```text
-POST /api/cron/weather
-Authorization: Bearer <CRON_SECRET>
+https://team-app.pages.dev
 ```
 
-Hourly is appropriate for the current monitoring design. It checks upcoming outdoor events and queues notifications only for meaningful forecast/alert changes.
+Equivalent local command:
 
-## 7. Health check
-
-```text
-GET /api/health
+```bash
+npm run smoke:prod -- https://team-app.pages.dev
 ```
 
-Expected response includes `ok: true`, service name, and version `1.8.0`.
+The smoke gate verifies the public app shell, production cloud bundle, offline queue module, connectivity-status assets, service worker, manifest, service-worker precache wiring, and baseline response security headers.
 
-## 8. Docker
+## 8. PWA/device staging
 
-A production multi-stage `Dockerfile` is included. The runtime runs as an unprivileged user and expects all secrets from environment variables.
+After the public smoke passes, test on real devices/browsers:
 
-## Important launch boundary
+- install to home screen
+- close/reopen
+- offline reload
+- make an offline coach edit
+- reconnect and confirm queued sync replay
+- update from V1.9 cache/service worker to V1.10
+- confirm the top-bar connectivity/sync indicator correctly reflects online/offline/pending state
+- verify no horizontal overflow at narrow mobile widths
 
-Before inviting real families, complete an end-to-end staging test of account creation, email delivery, object storage, push notifications, guardian-child linking, form signatures, and E2EE message key exchange on at least one iPhone and one Android device.
+## 9. Authenticated staging flow
+
+Use synthetic adult test accounts and non-real child/player data.
+
+Exercise:
+
+1. coach account creation/sign-in
+2. create/publish team
+3. guardian invitation or join code
+4. guardian joins linked athlete
+5. second-account role-boundary checks
+6. event availability response
+7. document upload/open/acknowledgment
+8. form assignment/submission/signature
+9. secure conversation creation/message exchange
+10. session expiry/re-authentication
+11. two-device optimistic-revision collision
+12. offline edit/reconnect queue replay
+
+Delete synthetic accounts/data after validation.
+
+## 10. Scheduled Worker
+
+`worker/wrangler.jsonc` defines `team-app-jobs` with an hourly schedule. The Worker is intentionally a scaffold until notification/email/provider secrets are configured and tested.
+
+Do not describe closed-app Web Push or automatic invitation email as production-complete until the Worker path is enabled and verified.
+
+## 11. File-storage boundary
+
+The current credential-free Data API document path is intentionally bounded and appropriate for controlled staging/smaller team documents. Large photo/video sharing should not launch on database blobs.
+
+The repository retains the hardened S3-compatible storage service path for a later live object-storage rollout and stress test.
+
+## 12. Legacy Node/Express compatibility path
+
+`server/`, `Dockerfile`, and related service tests remain useful for hardened compatibility/reference behavior. They are not required to serve the primary Cloudflare Pages static PWA.
+
+Do not mix the legacy self-hosted Better Auth service and Neon Managed Auth as simultaneous authoritative identity providers for the same deployment.
+
+## Launch boundary
+
+A successful build or public Pages smoke is not enough to invite real families.
+
+`RELEASE_READINESS.md` is the launch authority. Real-family production use remains blocked until the required live-device/auth/concurrency gates are PASS and the E2EE lost-device plus coach-private-note encryption policy decisions are resolved.

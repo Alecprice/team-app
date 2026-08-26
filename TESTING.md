@@ -1,68 +1,103 @@
-# Team APP V1.8 Testing
+# Team APP V1.10 Testing
 
-## One-command regression gate
+## Local release gate
+
+From the repository root:
 
 ```bash
+npm ci
+python3 -m pip install -r requirements-dev.txt
+python3 -m playwright install chromium
 npm test
+npm run verify:release
 ```
 
-The browser/core suite does not require the production cloud dependencies. Service contract tests are static/contract-focused when npm dependencies are unavailable.
+`npm test` runs the static/schema contracts plus the Playwright browser regression suite. `npm run verify:release` creates the Cloudflare Pages build and then checks that the package lock, V1.10 service-worker cache namespace, PWA precache assets, manifest icons, Wrangler Pages settings, bundled cloud client, and baseline security headers remain aligned.
 
-## Latest full regression result
+## Automated GitHub CI
+
+`.github/workflows/ci.yml` reproduces the release gate on Ubuntu using:
+
+- Node from `.node-version`
+- `npm ci`
+- Python 3.12
+- the pinned Playwright version from `requirements-dev.txt`
+- Chromium installed by Playwright
+- the full V1.10 regression suite
+- the Cloudflare release verifier
+
+CI has read-only repository permissions and cancels superseded runs on the same ref.
+
+## Current regression coverage
+
+The V1.10 suite covers:
+
+- six sport adapters
+- 183 competition profiles
+- registry/schema synchronization
+- saved-state V2 -> V8 migration
+- malformed/corrupted state recovery
+- multi-team isolation
+- Coach Center workflow
+- football multi-unit isolation
+- sport scoring models
+- formation/layout behavior
+- team default layouts
+- 66 layout combinations at 320x568
+- responsive behavior at 320x568, 390x844, 844x390, and 1440x900
+- 200% mobile text-size overflow checks
+- accessibility labels/names on core mobile views
+- hostile input/XSS rendering safety
+- 80-player heavy mobile stress
+- 500-player extreme season stress
+- cloud/service hardening contracts
+
+Stress ceilings are regression loads, not service-level performance guarantees.
+
+## Production smoke from GitHub
+
+A phone-friendly manual workflow is available at **Actions -> Production Smoke -> Run workflow**.
+
+The default target is:
 
 ```text
-Sport registry/schema sync             PASS
-Competition profile sync (183)         PASS
-Shared runtime                         PASS
-Schema contract (61 tables)            PASS
-V2 -> V8 state migration               PASS
-Malformed-state fuzz                   PASS
-Multi-team isolation                   PASS
-Coach Center workflow                  PASS
-Football unit isolation                PASS
-Sport scoring models                   PASS
-Formation/layout variants              PASS
-Team default layouts                   PASS
-66-layout chaos @ 320x568               PASS
-6 sports x 4 viewport classes          PASS
-80-player heavy mobile stress          PASS
-Page errors                            0
-Service/security contract tests        13/13 PASS
+https://team-app.pages.dev
 ```
 
-Heavy dataset:
+The workflow checks:
 
-- 80 players
-- 24 periods
-- 30 events
-- 40 practice activities
-- 390×844 viewport
+- `/`
+- `/cloud-client.js`
+- `/sw.js`
+- `/manifest.webmanifest`
+- baseline production security headers
+- the PWA manifest contract
+- that `cloud-client.js` is a real production bundle rather than the tiny development fallback
+- service-worker cache policy suitable for prompt updates
 
-Latest measured render times in this environment were approximately:
+The same check can be run locally:
 
-- roster: 134 ms
-- rotation: 244 ms
-- practice: 112 ms
-- schedule: 134 ms
-- Game Day: 238 ms
+```bash
+npm run smoke:prod -- https://team-app.pages.dev
+```
 
-These are regression measurements, not production performance guarantees.
+## Staging gates that still require real accounts/devices
 
-## Cloud integration testing still required after dependency install
+Public-asset smoke testing is not a substitute for authenticated staging. Before inviting real families, exercise the following against the actual Cloudflare Pages origin and live Neon Auth/Data API:
 
-The artifact-generation environment could not reach the npm registry, so the Better Auth/esbuild cloud bundle was not runtime-installed here. After `npm install && npm run build`, staging must exercise:
+- create adult coach account and sign in/out
+- session expiry and re-authentication
+- guardian signup/invite/join
+- two-account role boundaries
+- publish/synchronize team state
+- two-device optimistic-revision collision
+- offline coach edit -> reconnect -> queue replay
+- PWA install, close/reopen, and offline reload
+- V1.9 -> V1.10 service-worker/cache upgrade
+- guardian availability response
+- document upload/download/acknowledgment
+- form assignment/submission/signature
+- direct E2EE conversation between separate adult devices
+- CSP/header behavior in the real browser
 
-- create adult account
-- sign in/out
-- magic-link delivery
-- passkey registration/sign-in
-- publish team
-- second-device sync/conflict flow
-- invite guardian linked to child
-- redeem guardian join code
-- upload/download/acknowledge document through actual object storage
-- assign/submit/sign form
-- direct E2EE conversation between two separate adult devices
-- Web Push subscription and category preferences
-- weather cron notification
-- guardian event availability
+Closed-app Web Push, automatic invitation email, and large-object storage remain separate production-completion items and should not be treated as complete merely because the static PWA passes smoke testing.

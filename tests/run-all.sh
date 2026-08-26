@@ -33,10 +33,15 @@ echo '== Syntax =='
 node --check sports.js
 node --check competition-profiles.js
 node --check core/file-store.js
+node --check core/cloud-queue.js
+node --check core/connectivity-status.js
+node --check core/hardening-runtime.js
 node --check core/sport-runtime.js
 node --check app.js
 node --check scripts/generate-sport-schema.js
 node --check scripts/generate-competition-schema.js
+node --check scripts/verify-release.mjs
+node --check scripts/smoke-production.mjs
 
 echo '== Registry/schema sync =='
 node scripts/generate-sport-schema.js --check
@@ -60,7 +65,10 @@ run_batch 'Adapter behavior browser contracts' \
 run_batch 'Responsive + security + stress browser contracts' \
   'Layout chaos stress' tests/e2e_layout_chaos.py \
   'Six-sport responsive smoke' tests/e2e_smoke.py \
+  'Connectivity and offline status' tests/e2e_connectivity.py \
+  'Runtime hardening' tests/e2e_runtime_hardening.py \
   'Hostile input / XSS' tests/e2e_xss.py \
+  'Poisoned saved-state security' tests/e2e_poisoned_state.py \
   'Mobile accessibility labels' tests/e2e_accessibility.py \
   'Heavy mobile data stress' tests/e2e_stress.py \
   'Extreme season stress' tests/e2e_extreme_stress.py

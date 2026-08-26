@@ -94,6 +94,13 @@ test('offline cloud queue survives module reload, bounds growth, and preserves o
   await c.TEAM_APP_CLOUD_QUEUE.remove('team-10');assert.equal((await c.TEAM_APP_CLOUD_QUEUE.entries()).length,99);await c.TEAM_APP_CLOUD_QUEUE.clear();assert.equal((await c.TEAM_APP_CLOUD_QUEUE.entries()).length,0);
 });
 
+test('offline cloud queue does not expose another signed-in account records',async()=>{
+  const code=read('core/cloud-queue.js'),shared=new Map([['team-app-last-auth-user','adult-a']]),idb=new Map(),a=browserVm(code,{idbBacking:idb,localBacking:shared});
+  await a.TEAM_APP_CLOUD_QUEUE.put('team-private',{secret:'a'});assert.equal((await a.TEAM_APP_CLOUD_QUEUE.entries()).length,1);
+  shared.set('team-app-last-auth-user','adult-b');const b=browserVm(code,{idbBacking:idb,localBacking:shared});
+  assert.equal((await b.TEAM_APP_CLOUD_QUEUE.entries()).length,0);
+});
+
 test('production build dependencies are exact and currently published',()=>{
   const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   assert.equal(pkg.dependencies['@neondatabase/neon-js'],'0.7.0-beta');
