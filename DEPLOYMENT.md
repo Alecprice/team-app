@@ -97,13 +97,13 @@ The repository includes a phone-friendly GitHub Action:
 Default target:
 
 ```text
-https://team-app.pages.dev
+https://team-app-6mh.pages.dev
 ```
 
 Equivalent local command:
 
 ```bash
-npm run smoke:prod -- https://team-app.pages.dev
+npm run smoke:prod -- https://team-app-6mh.pages.dev
 ```
 
 The smoke gate verifies the public app shell, production cloud bundle, offline queue module, connectivity-status assets, service worker, manifest, service-worker precache wiring, and baseline response security headers.

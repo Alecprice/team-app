@@ -61,7 +61,7 @@ A phone-friendly manual workflow is available at **Actions -> Production Smoke -
 The default target is:
 
 ```text
-https://team-app.pages.dev
+https://team-app-6mh.pages.dev
 ```
 
 The workflow checks:
@@ -78,7 +78,7 @@ The workflow checks:
 The same check can be run locally:
 
 ```bash
-npm run smoke:prod -- https://team-app.pages.dev
+npm run smoke:prod -- https://team-app-6mh.pages.dev
 ```
 
 ## Staging gates that still require real accounts/devices

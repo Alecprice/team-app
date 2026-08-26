@@ -29,13 +29,13 @@ After Pages reports a successful production deployment, run the repository's man
 Default expected origin:
 
 ```text
-https://team-app.pages.dev
+https://team-app-6mh.pages.dev
 ```
 
 Equivalent local command:
 
 ```bash
-npm run smoke:prod -- https://team-app.pages.dev
+npm run smoke:prod -- https://team-app-6mh.pages.dev
 ```
 
 Do not mark the deployment verified merely because the build completed. The public smoke must prove that the expected assets and response headers are actually being served.

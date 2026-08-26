@@ -1,6 +1,6 @@
 import process from 'node:process';
 
-const rawBase = process.argv[2] || process.env.TEAM_APP_BASE_URL || 'https://team-app.pages.dev';
+const rawBase = process.argv[2] || process.env.TEAM_APP_BASE_URL || 'https://team-app-6mh.pages.dev';
 const base = rawBase.replace(/\/+$/, '');
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 15000);
 const expectedCommit = process.env.TEAM_APP_EXPECT_COMMIT || process.env.CF_PAGES_COMMIT_SHA || process.env.GITHUB_SHA || '';

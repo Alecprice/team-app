@@ -23,7 +23,7 @@ The previous/stale Vercel origin was removed from Neon Auth. The intended produc
 3. Connect `Alecprice/team-app` to a Cloudflare Pages project named `team-app`.
 4. Configure the Pages build command as `npm run build` and output directory as `dist`.
 5. Wait for a successful production deployment.
-6. Run the GitHub **Production Smoke** workflow against the exact production URL. The default expected origin is `https://team-app.pages.dev`.
+6. Run the GitHub **Production Smoke** workflow against the exact production URL. The default expected origin is `https://team-app-6mh.pages.dev`.
 7. Confirm `/`, `/cloud-client.js`, `/core/cloud-queue.js`, `/core/connectivity-status.js`, `/core/connectivity-status.css`, `/sw.js`, and `/manifest.webmanifest` all pass.
 8. Confirm production CSP/HSTS/anti-framing and related `_headers` behavior through the smoke workflow and a real browser.
 9. Add only the final canonical Cloudflare Pages production origin to Neon Auth trusted origins.

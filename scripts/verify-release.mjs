@@ -89,7 +89,7 @@ assert(/^\d{4}-\d{2}-\d{2}$/.test(String(wrangler.compatibility_date || '')), 'P
 assert(workerWrangler.name === 'team-app-jobs', 'scheduled Worker name is team-app-jobs');
 assert(workerWrangler.main === 'src/index.js', 'scheduled Worker entry point is explicit');
 assert(/^\d{4}-\d{2}-\d{2}$/.test(String(workerWrangler.compatibility_date || '')), 'Worker compatibility date is explicit');
-assert(workerWrangler.vars?.APP_ORIGIN === 'https://team-app.pages.dev', 'Worker app origin matches expected canonical Pages origin');
+assert(workerWrangler.vars?.APP_ORIGIN === 'https://team-app-6mh.pages.dev', 'Worker app origin matches expected canonical Pages origin');
 assert(Array.isArray(workerWrangler.triggers?.crons) && workerWrangler.triggers.crons.length === 1, 'scheduled Worker has exactly one cron trigger');
 assert(workerSource.includes(`const VERSION='${pkg.version}'`), `Worker health version matches V${pkg.version}`);
 assert(workerSource.includes("mode:'scaffold'"), 'Worker health explicitly reports scaffold mode');

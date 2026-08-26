@@ -6,7 +6,7 @@ on:
       base_url:
         description: Production URL to verify
         required: true
-        default: https://team-app.pages.dev
+        default: https://team-app-6mh.pages.dev
         type: string
       expected_commit:
         description: Expected deployed Git SHA (defaults to this workflow commit)

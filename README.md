@@ -141,7 +141,7 @@ The V1.10 regression suite covers state migration/fuzzing, multi-team isolation,
 Once the Pages deployment is reachable:
 
 ```bash
-npm run smoke:prod -- https://team-app.pages.dev
+npm run smoke:prod -- https://team-app-6mh.pages.dev
 ```
 
 There is also a phone-friendly manual GitHub Action under **Actions -> Production Smoke**. It verifies the public root page, `cloud-client.js`, `sw.js`, manifest, PWA contract, and baseline response security headers.

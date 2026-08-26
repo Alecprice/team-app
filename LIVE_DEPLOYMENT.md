@@ -9,7 +9,7 @@ Expected Pages project: `team-app`
 Expected default Pages origin:
 
 ```text
-https://team-app.pages.dev
+https://team-app-6mh.pages.dev
 ```
 
 Do not change this file to `DEPLOYED` based only on a successful build. Record deployment as verified only after the public smoke gate and required live staging checks have evidence.

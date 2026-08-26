@@ -11,7 +11,7 @@ const workerPromise=import(`data:text/javascript;base64,${Buffer.from(source).to
 
 test('scheduled Worker exposes explicit scaffold health without enabling delivery',async()=>{
   const worker=await workerPromise;
-  const env={APP_ORIGIN:'https://team-app.pages.dev'};
+  const env={APP_ORIGIN:'https://team-app-6mh.pages.dev'};
   const response=await worker.fetch(new Request('https://jobs.example/health'),env);
   assert.equal(response.status,200);
   assert.equal(response.headers.get('cache-control'),'no-store');
@@ -28,7 +28,7 @@ test('scheduled Worker exposes explicit scaffold health without enabling deliver
 
 test('scheduled Worker health supports HEAD and rejects unsafe methods',async()=>{
   const worker=await workerPromise;
-  const env={APP_ORIGIN:'https://team-app.pages.dev'};
+  const env={APP_ORIGIN:'https://team-app-6mh.pages.dev'};
   const head=await worker.fetch(new Request('https://jobs.example/health',{method:'HEAD'}),env);
   assert.equal(head.status,200);
   assert.equal(await head.text(),'');
