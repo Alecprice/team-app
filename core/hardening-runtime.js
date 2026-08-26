@@ -13,20 +13,29 @@
   function hash(value){const text=JSON.stringify(value);let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}return `${text.length}:${(h>>>0).toString(16)}`;}
   function rawGet(key){try{return rawStorage?.get.call(root.localStorage,key)||null;}catch{return null;}}
   function rawSet(key,value){try{rawStorage?.set.call(root.localStorage,key,String(value));return true;}catch{return false;}}
-  function storageNamespace(){if(DEMO)return DEMO_PREFIX;const account=rawGet(ACCOUNT_MARKER);return account?`team-app-account:${account}:`:'team-app-unclaimed:';}
+  let tabAccount=rawGet(ACCOUNT_MARKER);
+  function storageNamespace(){if(DEMO)return DEMO_PREFIX;const account=tabAccount||rawGet(ACCOUNT_MARKER);return account?`team-app-account:${account}:`:'team-app-unclaimed:';}
   function mappedKey(key){return STATE_KEYS.has(String(key))?storageNamespace()+key:key;}
 
   if(rawStorage){
     const proto=root.Storage.prototype;
     proto.getItem=function(key){return rawStorage.get.call(this,mappedKey(key));};
     proto.removeItem=function(key){return rawStorage.remove.call(this,mappedKey(key));};
-    proto.setItem=function(key,value){const mapped=mappedKey(key);try{const result=rawStorage.set.call(this,mapped,value);if(String(mapped).includes('team-app'))channel?.postMessage({type:'storage-write',account:rawGet(ACCOUNT_MARKER),at:Date.now()});return result;}catch(error){dispatch('teamapp:storage-failure',{key:String(mapped),message:String(error?.message||error)});throw error;}};
+    proto.setItem=function(key,value){const mapped=mappedKey(key);try{const result=rawStorage.set.call(this,mapped,value);if(String(mapped).includes('team-app'))channel?.postMessage({type:'storage-write',account:tabAccount||rawGet(ACCOUNT_MARKER),at:Date.now()});return result;}catch(error){dispatch('teamapp:storage-failure',{key:String(mapped),message:String(error?.message||error)});throw error;}};
   }
 
   function storageBanner(message='Changes cannot be saved permanently on this device. Keep this page open and reconnect/export before leaving.'){
     let el=document.getElementById('teamAppStorageWarning');if(!el){el=document.createElement('div');el.id='teamAppStorageWarning';el.className='teamapp-persistent-warning';el.setAttribute('role','alert');document.body.appendChild(el);}el.textContent=message;
   }
   root.addEventListener('teamapp:storage-failure',()=>storageBanner());
+
+  function lockForExternalAccountChange(nextAccount){
+    if(DEMO||!tabAccount||String(nextAccount||'')===String(tabAccount))return;
+    reloadForAccount=true;
+    document.body.classList.add('teamapp-auth-locked');
+    storageBanner('Another tab changed the signed-in Team APP account. Reload this tab before editing team data.');
+    dispatch('teamapp:cloud-state-change',{signedIn:false,account:tabAccount,staleAccount:true});
+  }
 
   function cloudPresent(){return Boolean(root.TeamAppCloud);}
   function migrateUnclaimedState(userId){
@@ -38,9 +47,10 @@
     }
   }
   function reconcileAccountNamespace(){
-    if(DEMO||!cloudPresent())return;const userId=root.TeamAppCloud.session?.user?.id||null;if(!userId)return;const marker=rawGet(ACCOUNT_MARKER);if(marker===String(userId))return;
-    if(!marker)migrateUnclaimedState(String(userId));
-    if(!rawSet(ACCOUNT_MARKER,userId))return;channel?.postMessage({type:'account-change',account:String(userId),at:Date.now()});
+    if(DEMO||!cloudPresent())return;const userId=root.TeamAppCloud.session?.user?.id||null;if(!userId)return;if(tabAccount===String(userId))return;
+    const previousAccount=tabAccount;
+    if(!previousAccount)migrateUnclaimedState(String(userId));
+    if(!rawSet(ACCOUNT_MARKER,userId))return;tabAccount=String(userId);channel?.postMessage({type:'account-change',account:String(userId),previousAccount,at:Date.now()});
     const key='team-app-account-reload';try{if(root.sessionStorage.getItem(key)!==String(userId)){root.sessionStorage.setItem(key,String(userId));reloadForAccount=true;root.location.reload();}}catch{}
   }
   function updateAuthLock(){
@@ -105,5 +115,6 @@
   function start(){hardenDynamicUi(document);updateAuthLock();patchSyncScheduler();observer.observe(document.body,{childList:true,subtree:true});root.setInterval(()=>{if(!reloadForAccount){updateAuthLock();patchSyncScheduler();}},1500);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 
-  channel?.addEventListener('message',event=>{if(event.data?.type==='storage-write'&&event.data.account===rawGet(ACCOUNT_MARKER))dispatch('teamapp:other-tab-change',event.data);if(event.data?.type==='account-change'&&event.data.account!==rawGet(ACCOUNT_MARKER))storageBanner('Another tab changed the signed-in Team APP account. Reload this tab before editing team data.');});
+  root.addEventListener('storage',event=>{if(event.key===ACCOUNT_MARKER)lockForExternalAccountChange(event.newValue);});
+  channel?.addEventListener('message',event=>{if(event.data?.type==='storage-write'&&event.data.account===tabAccount)dispatch('teamapp:other-tab-change',event.data);if(event.data?.type==='account-change')lockForExternalAccountChange(event.data.account);});
 })(typeof window!=='undefined'?window:globalThis);
