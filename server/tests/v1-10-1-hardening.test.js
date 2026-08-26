@@ -36,6 +36,10 @@ test('runtime hardening is loaded before main app and sensitive PWA navigation i
   assert.ok(runtime.includes('teamapp-auth-locked'));
   assert.ok(runtime.includes('teamapp:storage-failure'));
   assert.ok(runtime.includes('BroadcastChannel'));
+  for(const token of ['tabAccount','lockForExternalAccountChange',"event.key===ACCOUNT_MARKER","event.data?.type==='account-change'","document.body.classList.add('teamapp-auth-locked')"]){
+    assert.ok(runtime.includes(token),`missing stale-tab account isolation contract: ${token}`);
+  }
+  assert.match(runtime,/storageNamespace\(\)[\s\S]*tabAccount\|\|rawGet\(ACCOUNT_MARKER\)/,'state namespace must stay pinned to the tab account during cross-tab account changes');
 });
 
 test('cloud admin hardening uses the documented recovery adapter and access lifecycle RPCs',()=>{
