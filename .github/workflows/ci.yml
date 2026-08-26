@@ -64,6 +64,9 @@ jobs:
       - name: Compile scheduled Worker without deploying
         run: npm run verify:worker
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
       - name: Verify tracked sources stay clean
         run: git diff --exit-code -- . ':!dist'
 
