@@ -39,7 +39,7 @@ assert.ok(serverIndex.includes("version:'1.10.0'"),'health endpoint version must
 assert.ok(serverIndex.includes('Team APP V1.10 listening'),'server banner must match V1.10');
 
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-assert.match(pkg.scripts.dev,/serve-static/,'default dev command must preview the Cloudflare/static architecture');
+assert.match(pkg.scripts.dev,/wrangler pages dev dist/,'default dev command must preview Cloudflare Pages static assets and Functions together');
 assert.match(pkg.scripts.start,/serve-static/,'default start command must serve built static output');
 assert.ok(!/server\/src\/index/.test(pkg.scripts.dev||''),'default dev command must not launch legacy Express server');
 assert.ok(app.includes("const STORAGE_KEY = 'team-app-service-v1.10-state'"),'active local storage key must match V1.10');
