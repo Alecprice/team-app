@@ -14,7 +14,7 @@
     "test": "bash tests/run-all.sh && node --test server/tests/*.test.js",
     "test:service": "node --test server/tests/*.test.js",
     "build:cloudflare": "node scripts/build-cloudflare.js",
-    "verify:release": "npm run build && node scripts/verify-release.mjs",
+    "verify:release": "npm run build && node scripts/verify-release.mjs && node scripts/verify-auth-transport.mjs",
     "verify:pages-functions": "rm -rf .wrangler-pages-functions && mkdir -p .wrangler-pages-functions && npx wrangler pages functions build functions --outfile .wrangler-pages-functions/index.js --project-directory .",
     "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir .wrangler-dry-run",
     "smoke:prod": "node scripts/smoke-production.mjs",
