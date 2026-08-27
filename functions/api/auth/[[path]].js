@@ -1,13 +1,30 @@
 const NEON_AUTH_UPSTREAM='https://ep-noisy-violet-awtos8ns.neonauth.c-12.us-east-1.aws.neon.tech/neondb/auth';
 const TEAM_APP_AUTH_PREFIX='/api/auth';
+const NEON_AUTH_COOKIE_PREFIX='__Secure-neon-auth';
+const REQUEST_HEADER_ALLOWLIST=['user-agent','authorization','referer','content-type','x-neon-client-info'];
+const RESPONSE_HEADER_ALLOWLIST=['content-type','content-encoding','date','set-auth-jwt','set-auth-token','x-neon-ret-request-id'];
 
 function authPath(params={}){
   const value=Array.isArray(params.path)?params.path.join('/'):String(params.path||'');
   return value.split('/').filter(Boolean).map(segment=>encodeURIComponent(segment)).join('/');
 }
 
+function neonCookieHeader(headers){
+  const raw=headers.get('cookie')||'';
+  if(!raw)return '';
+  return raw.split(';').map(part=>part.trim()).filter(Boolean).filter(part=>{
+    const name=part.slice(0,part.indexOf('=')>=0?part.indexOf('='):part.length).trim();
+    return name.startsWith(NEON_AUTH_COOKIE_PREFIX);
+  }).join('; ');
+}
+
 function rewriteSetCookie(cookie){
-  return String(cookie||'').replace(/;\s*Domain=[^;]+/ig,'');
+  let value=String(cookie||'')
+    .replace(/;\s*Domain=[^;]+/ig,'')
+    .replace(/;\s*Partitioned\b/ig,'')
+    .replace(/;\s*SameSite=(?:Strict|Lax|None)\b/ig,'');
+  if(!/;\s*Secure\b/i.test(value))value+='; Secure';
+  return `${value}; SameSite=Lax`;
 }
 
 function upstreamCookies(headers){
@@ -30,15 +47,45 @@ function rewriteLocation(value,requestOrigin){
   return `${requestOrigin}${TEAM_APP_AUTH_PREFIX}${suffix}${target.search}${target.hash}`;
 }
 
+function upstreamRequestHeaders(request,incoming){
+  const headers=new Headers();
+  for(const name of REQUEST_HEADER_ALLOWLIST){
+    const value=request.headers.get(name);
+    if(value)headers.set(name,value);
+  }
+  headers.set('Origin',request.headers.get('origin')||incoming.origin);
+  const cookies=neonCookieHeader(request.headers);
+  if(cookies)headers.set('Cookie',cookies);
+  headers.set('X-Neon-Auth-Middleware','true');
+  return headers;
+}
+
+function downstreamResponseHeaders(response,incoming){
+  const out=new Headers();
+  for(const name of RESPONSE_HEADER_ALLOWLIST){
+    const value=response.headers.get(name);
+    if(value)out.set(name,value);
+  }
+
+  const cookies=upstreamCookies(response.headers);
+  for(const cookie of cookies)out.append('Set-Cookie',rewriteSetCookie(cookie));
+
+  const location=response.headers.get('location');
+  if(location)out.set('Location',rewriteLocation(location,incoming.origin));
+
+  out.set('Cache-Control','no-store');
+  out.set('X-Team-App-Auth-Proxy','1');
+  out.set('X-Content-Type-Options','nosniff');
+  return out;
+}
+
 export async function onRequest(context){
   const incoming=new URL(context.request.url);
   const suffix=authPath(context.params);
   const upstream=new URL(`${NEON_AUTH_UPSTREAM}${suffix?`/${suffix}`:''}`);
   upstream.search=incoming.search;
 
-  const headers=new Headers(context.request.headers);
-  headers.delete('host');
-
+  const headers=upstreamRequestHeaders(context.request,incoming);
   const init={method:context.request.method,headers,redirect:'manual'};
   if(context.request.method!=='GET'&&context.request.method!=='HEAD')init.body=context.request.body;
 
@@ -50,19 +97,9 @@ export async function onRequest(context){
     return Response.json({error:'auth_service_unavailable'},{status:502,headers:{'Cache-Control':'no-store','X-Team-App-Auth-Proxy':'1','X-Content-Type-Options':'nosniff'}});
   }
 
-  const out=new Headers(response.headers);
-  out.set('Cache-Control','no-store');
-  out.set('X-Team-App-Auth-Proxy','1');
-  out.set('X-Content-Type-Options','nosniff');
-
-  const cookies=upstreamCookies(response.headers);
-  if(cookies.length){
-    out.delete('set-cookie');
-    for(const cookie of cookies)out.append('Set-Cookie',rewriteSetCookie(cookie));
-  }
-
-  const location=out.get('location');
-  if(location)out.set('location',rewriteLocation(location,incoming.origin));
-
-  return new Response(response.body,{status:response.status,statusText:response.statusText,headers:out});
+  return new Response(response.body,{
+    status:response.status,
+    statusText:response.statusText,
+    headers:downstreamResponseHeaders(response,incoming)
+  });
 }
