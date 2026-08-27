@@ -7,7 +7,7 @@
     "node": ">=20 <25"
   },
   "scripts": {
-    "dev": "npm run build && node scripts/serve-static.js",
+    "dev": "npm run build && npx wrangler pages dev dist",
     "start": "node scripts/serve-static.js",
     "build": "node scripts/build-cloudflare.js",
     "build:client": "node server/scripts/build-client.js",
@@ -15,6 +15,7 @@
     "test:service": "node --test server/tests/*.test.js",
     "build:cloudflare": "node scripts/build-cloudflare.js",
     "verify:release": "npm run build && node scripts/verify-release.mjs",
+    "verify:pages-functions": "rm -rf .wrangler-pages-functions && mkdir -p .wrangler-pages-functions && npx wrangler pages functions build functions --outfile .wrangler-pages-functions/index.js --project-directory .",
     "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir .wrangler-dry-run",
     "smoke:prod": "node scripts/smoke-production.mjs",
     "gate": "bash scripts/local-release-gate.sh",
