@@ -20,7 +20,7 @@ const POLL_OLD="await load();pollTimer=setInterval(()=>load().catch(console.warn
 const POLL_NEW="await load();const poll=()=>{if(document.visibilityState==='visible')load().catch(console.warn);};pollTimer=setInterval(poll,8000);";
 const DIRECT_OLD='const directTargets=members.filter(m=>m.id!==me?.user?.id);';
 const DIRECT_NEW='const directTargets=members.filter(m=>m.id!==me?.user?.id&&(coach||coachRoles.has(m.role)));';
-const sourcePlugin={name:'team-app-cloud-source-hardening',setup(ctx){ctx.onLoad({filter:/client\/(?:cloud-entry|cloud-admin-hardening)\.js$/},async args=>{
+const sourcePlugin={name:'team-app-cloud-source-hardening',setup(ctx){ctx.onLoad({filter:/client\/(?:cloud-entry|cloud-admin-hardening|auth-recovery)\.js$/},async args=>{
   let contents=await fs.readFile(args.path,'utf8');contents=contents.replaceAll(DEFAULT_AUTH,authUrl).replaceAll(DEFAULT_DATA,dataUrl).replaceAll('__TEAM_APP_SOCIAL_PROVIDERS__',socialProviders);
   if(args.path.endsWith('cloud-entry.js')){
     for(const [needle,label] of [[OLD_SEND,'message send'],[SYNC_DECL,'sync declaration'],[QUEUE_DECL,'queue declaration'],[POLL_OLD,'message polling'],[DIRECT_OLD,'direct-message targets']])if(!contents.includes(needle))throw new Error(`Cloud ${label} source contract changed; update the hardening transform.`);
