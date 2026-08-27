@@ -7,11 +7,16 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 
-test('production bundle routes Neon Auth through the Team APP origin',()=>{
+test('production bundle routes Neon Auth through the current Team APP origin',()=>{
   const build=read('scripts/build-cloudflare.js');
-  assert.match(build,/const authUrl=process\.env\.TEAM_APP_NEON_AUTH_URL\|\|'\/api\/auth'/);
-  assert.match(build,/replaceAll\(DEFAULT_AUTH,authUrl\)/);
-  assert.match(build,/Auth transport:/);
+  for(const token of [
+    "const authUrl=(process.env.TEAM_APP_NEON_AUTH_URL||'').replace",
+    "new URL('/api/auth',location.origin)",
+    'authDeclaration',
+    'authNeedle',
+    'contents.replace(authNeedle,authDeclaration)',
+    'same-origin Pages proxy (/api/auth)'
+  ]) assert.ok(build.includes(token),`missing build auth transport contract: ${token}`);
 });
 
 test('Pages auth proxy is fixed to Neon Auth and preserves first-party session cookies',()=>{
