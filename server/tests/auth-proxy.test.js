@@ -27,6 +27,9 @@ test('Pages auth proxy is fixed to Neon Auth and preserves first-party session c
     "redirect:'manual'",
     "headers.delete('host')",
     'getSetCookie',
+    'getAll',
+    "headers.getAll('Set-Cookie')",
+    'encodeURIComponent(segment)',
     "out.delete('set-cookie')",
     "replace(/;\\s*Domain=[^;]+/ig,'')",
     "out.set('Cache-Control','no-store')",
@@ -34,6 +37,7 @@ test('Pages auth proxy is fixed to Neon Auth and preserves first-party session c
     'rewriteLocation(location,incoming.origin)'
   ]) assert.ok(proxy.includes(token),`missing first-party auth proxy contract: ${token}`);
   assert.doesNotMatch(proxy,/searchParams\.get\(['"](?:url|upstream|target)['"]\)/i,'auth proxy must not accept a user-controlled upstream');
+  assert.match(proxy,/split\('\/'\).*map\(segment=>encodeURIComponent\(segment\)\)/,'auth path segments must be normalized before the upstream URL is constructed');
 });
 
 test('local and CI release gates compile Pages Functions',()=>{
