@@ -7,7 +7,7 @@ const dist=path.join(root,'dist');
 const pkg=JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8'));
 const DEFAULT_AUTH='https://ep-noisy-violet-awtos8ns.neonauth.c-12.us-east-1.aws.neon.tech/neondb/auth';
 const DEFAULT_DATA='https://ep-noisy-violet-awtos8ns.apirest.c-12.us-east-1.aws.neon.tech/neondb/rest/v1';
-const authUrl=process.env.TEAM_APP_NEON_AUTH_URL||DEFAULT_AUTH;
+const authUrl=process.env.TEAM_APP_NEON_AUTH_URL||'/api/auth';
 const dataUrl=process.env.TEAM_APP_NEON_DATA_API_URL||DEFAULT_DATA;
 const buildEnv=process.env.TEAM_APP_ENV||process.env.CF_PAGES_BRANCH||'local';
 const commitSha=process.env.CF_PAGES_COMMIT_SHA||process.env.GITHUB_SHA||'local';
@@ -40,4 +40,5 @@ for(const dir of ['core','icons'])await fs.cp(path.join(root,dir),path.join(dist
 await fs.writeFile(path.join(dist,'build-info.json'),JSON.stringify({app:'team-app',version:pkg.version,environment:buildEnv,commit:commitSha,builtAt:new Date().toISOString()},null,2)+'\n');
 console.log('Built Team APP static Cloudflare Pages output:',dist);
 console.log(`Environment: ${buildEnv} · commit: ${commitSha}`);
+console.log(`Auth transport: ${authUrl.startsWith('/')?'same-origin Pages proxy':authUrl}`);
 console.log(`Social providers: ${socialProviders||'none'}`);
