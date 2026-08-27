@@ -7,7 +7,10 @@ const dist=path.join(root,'dist');
 const pkg=JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8'));
 const DEFAULT_AUTH='https://ep-noisy-violet-awtos8ns.neonauth.c-12.us-east-1.aws.neon.tech/neondb/auth';
 const DEFAULT_DATA='https://ep-noisy-violet-awtos8ns.apirest.c-12.us-east-1.aws.neon.tech/neondb/rest/v1';
-const authUrl=process.env.TEAM_APP_NEON_AUTH_URL||DEFAULT_AUTH;
+const authUrl=(process.env.TEAM_APP_NEON_AUTH_URL||'').replace(/\/+$/,'');
+const authDeclaration=authUrl
+  ? `const NEON_AUTH_URL=${JSON.stringify(authUrl)};`
+  : "const NEON_AUTH_URL=new URL('/api/auth',location.origin).href.replace(/\\/$/,'');";
 const dataUrl=process.env.TEAM_APP_NEON_DATA_API_URL||DEFAULT_DATA;
 const buildEnv=process.env.TEAM_APP_ENV||process.env.CF_PAGES_BRANCH||'local';
 const commitSha=process.env.CF_PAGES_COMMIT_SHA||process.env.GITHUB_SHA||'local';
@@ -20,8 +23,11 @@ const POLL_OLD="await load();pollTimer=setInterval(()=>load().catch(console.warn
 const POLL_NEW="await load();const poll=()=>{if(document.visibilityState==='visible')load().catch(console.warn);};pollTimer=setInterval(poll,8000);";
 const DIRECT_OLD='const directTargets=members.filter(m=>m.id!==me?.user?.id);';
 const DIRECT_NEW='const directTargets=members.filter(m=>m.id!==me?.user?.id&&(coach||coachRoles.has(m.role)));';
+const authNeedle=`const NEON_AUTH_URL='${DEFAULT_AUTH}';`;
 const sourcePlugin={name:'team-app-cloud-source-hardening',setup(ctx){ctx.onLoad({filter:/client\/(?:cloud-entry|cloud-admin-hardening|auth-recovery)\.js$/},async args=>{
-  let contents=await fs.readFile(args.path,'utf8');contents=contents.replaceAll(DEFAULT_AUTH,authUrl).replaceAll(DEFAULT_DATA,dataUrl).replaceAll('__TEAM_APP_SOCIAL_PROVIDERS__',socialProviders);
+  let contents=await fs.readFile(args.path,'utf8');
+  if(!contents.includes(authNeedle))throw new Error(`Cloud auth source contract changed in ${path.basename(args.path)}; update the auth transport transform.`);
+  contents=contents.replace(authNeedle,authDeclaration).replaceAll(DEFAULT_DATA,dataUrl).replaceAll('__TEAM_APP_SOCIAL_PROVIDERS__',socialProviders);
   if(args.path.endsWith('cloud-entry.js')){
     for(const [needle,label] of [[OLD_SEND,'message send'],[SYNC_DECL,'sync declaration'],[QUEUE_DECL,'queue declaration'],[POLL_OLD,'message polling'],[DIRECT_OLD,'direct-message targets']])if(!contents.includes(needle))throw new Error(`Cloud ${label} source contract changed; update the hardening transform.`);
     contents=contents.replace(OLD_SEND,NEW_SEND);
@@ -40,4 +46,5 @@ for(const dir of ['core','icons'])await fs.cp(path.join(root,dir),path.join(dist
 await fs.writeFile(path.join(dist,'build-info.json'),JSON.stringify({app:'team-app',version:pkg.version,environment:buildEnv,commit:commitSha,builtAt:new Date().toISOString()},null,2)+'\n');
 console.log('Built Team APP static Cloudflare Pages output:',dist);
 console.log(`Environment: ${buildEnv} · commit: ${commitSha}`);
+console.log(`Auth transport: ${authUrl||'same-origin Pages proxy (/api/auth)'}`);
 console.log(`Social providers: ${socialProviders||'none'}`);

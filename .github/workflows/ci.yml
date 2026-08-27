@@ -61,6 +61,9 @@ jobs:
       - name: Verify Pages release build and contracts
         run: npm run verify:release
 
+      - name: Compile Pages auth proxy without deploying
+        run: npm run verify:pages-functions
+
       - name: Compile scheduled Worker without deploying
         run: npm run verify:worker
 

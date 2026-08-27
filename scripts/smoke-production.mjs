@@ -54,6 +54,15 @@ if (home) {
   }
 }
 
+const authProxy = await get('/api/auth/get-session', { expectType: 'json' });
+if (authProxy) {
+  const marker=authProxy.response.headers.get('x-team-app-auth-proxy');
+  if(marker==='1')pass('auth session endpoint is served by the Team APP first-party proxy');else fail(`auth proxy marker is missing or unexpected: ${JSON.stringify(marker)}`);
+  const cacheControl=authProxy.response.headers.get('cache-control')||'';
+  if(/no-store/i.test(cacheControl))pass('auth proxy session response is not cached');else fail(`auth proxy cache-control is unexpected: ${JSON.stringify(cacheControl)}`);
+  try{JSON.parse(authProxy.body||'null');pass('auth proxy session response is valid JSON');}catch(error){fail(`auth proxy session response is not valid JSON: ${error.message}`);}
+}
+
 const publicAssets = [
   ['/cloud-client.js', 'javascript'],['/core/cloud-queue.js', 'javascript'],['/core/connectivity-status.js', 'javascript'],['/core/connectivity-status.css', 'text/css'],['/core/hardening-runtime.js','javascript'],['/core/hardening-runtime.css','text/css']
 ];
@@ -61,6 +70,8 @@ for (const [path, type] of publicAssets) {
   const asset = await get(path, { expectType: type });
   if (path === '/cloud-client.js' && asset) {
     if (asset.body.length > 5000) pass(`cloud-client.js looks like a production bundle (${asset.body.length} bytes)`);else fail(`cloud-client.js is unexpectedly small (${asset.body.length} bytes)`);
+    if(asset.body.includes('/api/auth'))pass('cloud-client.js uses the same-origin auth route');else fail('cloud-client.js is missing the same-origin auth route');
+    if(asset.body.includes('ep-noisy-violet-awtos8ns.neonauth.c-12.us-east-1.aws.neon.tech/neondb/auth'))fail('cloud-client.js still contains the cross-origin Neon Auth endpoint');else pass('cloud-client.js does not call Neon Auth cross-origin');
   }
 }
 
@@ -85,4 +96,4 @@ if (manifest) {
 }
 
 if (failures.length) { console.error(`\nProduction smoke FAILED with ${failures.length} issue(s).`);process.exit(1); }
-console.log('\nProduction smoke PASSED. Build identity, public assets, offline wiring, and baseline security headers look healthy.');
+console.log('\nProduction smoke PASSED. Build identity, first-party auth, public assets, offline wiring, and baseline security headers look healthy.');

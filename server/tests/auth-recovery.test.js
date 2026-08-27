@@ -29,9 +29,12 @@ test('password recovery owns request, reset-token completion, and signed-in pass
   assert.match(recovery,/for\(const key of \[RESET_MARKER,'token','error','error_description'\]\)url\.searchParams\.delete\(key\)/,'reset secrets must be removed from the browser URL after use');
 });
 
-test('auth recovery is bundled and receives environment-specific Neon Auth URL substitution',()=>{
+test('auth recovery is bundled and receives the first-party auth URL transform',()=>{
   const entry=read('client/cloud-entry-hardened.js'),build=read('scripts/build-cloudflare.js');
   assert.match(entry,/import '\.\/auth-recovery\.js';/);
   assert.match(build,/cloud-entry\|cloud-admin-hardening\|auth-recovery/);
-  assert.match(build,/replaceAll\(DEFAULT_AUTH,authUrl\)/);
+  assert.match(build,/authNeedle/);
+  assert.match(build,/authDeclaration/);
+  assert.match(build,/contents\.replace\(authNeedle,authDeclaration\)/);
+  assert.match(build,/new URL\('\/api\/auth',location\.origin\)/);
 });
