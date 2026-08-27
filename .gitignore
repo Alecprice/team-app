@@ -12,3 +12,4 @@ tests/last-*-report.json
 .venv/
 .wrangler-dry-run/
 .wrangler-pages-functions/
+.wrangler/
