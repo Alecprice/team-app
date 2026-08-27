@@ -2,9 +2,8 @@ const NEON_AUTH_UPSTREAM='https://ep-noisy-violet-awtos8ns.neonauth.c-12.us-east
 const TEAM_APP_AUTH_PREFIX='/api/auth';
 
 function authPath(params={}){
-  const value=params.path;
-  if(Array.isArray(value))return value.map(String).join('/');
-  return value?String(value):'';
+  const value=Array.isArray(params.path)?params.path.join('/'):String(params.path||'');
+  return value.split('/').filter(Boolean).map(segment=>encodeURIComponent(segment)).join('/');
 }
 
 function rewriteSetCookie(cookie){
@@ -13,6 +12,9 @@ function rewriteSetCookie(cookie){
 
 function upstreamCookies(headers){
   if(typeof headers.getSetCookie==='function')return headers.getSetCookie();
+  if(typeof headers.getAll==='function'){
+    try{return headers.getAll('Set-Cookie');}catch{}
+  }
   const one=headers.get('set-cookie');
   return one?[one]:[];
 }
