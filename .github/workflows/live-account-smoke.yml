@@ -1,0 +1,42 @@
+name: Live Account Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      mutate:
+        description: 'Create a throwaway TENX Smoke team and run the two-session revision-conflict test'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-app-live-account-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Verify synthetic smoke secrets exist
+        env:
+          TEAM_APP_SMOKE_EMAIL: ${{ secrets.TEAM_APP_SMOKE_EMAIL }}
+          TEAM_APP_SMOKE_PASSWORD: ${{ secrets.TEAM_APP_SMOKE_PASSWORD }}
+        run: |
+          test -n "$TEAM_APP_SMOKE_EMAIL" || { echo 'Missing TEAM_APP_SMOKE_EMAIL secret'; exit 1; }
+          test -n "$TEAM_APP_SMOKE_PASSWORD" || { echo 'Missing TEAM_APP_SMOKE_PASSWORD secret'; exit 1; }
+
+      - name: Run live synthetic account smoke
+        env:
+          TEAM_APP_SMOKE_EMAIL: ${{ secrets.TEAM_APP_SMOKE_EMAIL }}
+          TEAM_APP_SMOKE_PASSWORD: ${{ secrets.TEAM_APP_SMOKE_PASSWORD }}
+          TEAM_APP_SMOKE_MUTATE: ${{ inputs.mutate }}
+        run: npm run smoke:account
