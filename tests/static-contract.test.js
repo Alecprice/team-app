@@ -6,6 +6,7 @@ const root=path.resolve(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
+const serveStatic=fs.readFileSync(path.join(root,'scripts/serve-static.js'),'utf8');
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest'),'utf8'));
 assert.ok(html.indexOf('./sports.js')<html.indexOf('./competition-profiles.js'),'sports registry must load before competition profiles');
 assert.ok(html.indexOf('./competition-profiles.js')<html.indexOf('./core/sport-runtime.js'),'competition profiles must load before shared runtime/app');
@@ -41,6 +42,8 @@ assert.ok(serverIndex.includes('Team APP V1.10 listening'),'server banner must m
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 assert.match(pkg.scripts.dev,/wrangler pages dev dist/,'default dev command must preview Cloudflare Pages static assets and Functions together');
 assert.match(pkg.scripts.start,/serve-static/,'default start command must serve built static output');
+assert.ok(serveStatic.includes("if(!isNavigation){res.writeHead(404"),'static preview must return 404 for missing asset requests');
+assert.ok(serveStatic.includes("file=path.join(root,'index.html')"),'static preview must retain app-shell fallback for navigation requests');
 assert.ok(!/server\/src\/index/.test(pkg.scripts.dev||''),'default dev command must not launch legacy Express server');
 assert.ok(app.includes("const STORAGE_KEY = 'team-app-service-v1.10-state'"),'active local storage key must match V1.10');
 assert.ok(app.includes("'team-app-service-v1.9-state'"),'V1.9 local state must remain migratable');
