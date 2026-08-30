@@ -5,6 +5,20 @@ cd "$ROOT"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+echo '== Browser test preflight =='
+python3 - <<'PYTEST'
+from pathlib import Path
+try:
+    from playwright.sync_api import sync_playwright
+except ModuleNotFoundError:
+    raise SystemExit('Python Playwright is missing. Run: python3 -m pip install -r requirements-dev.txt')
+with sync_playwright() as p:
+    executable=Path(p.chromium.executable_path)
+    if not executable.is_file():
+        raise SystemExit('Playwright Chromium is missing. Run: python3 -m playwright install chromium')
+print('PASS Python Playwright + Chromium available')
+PYTEST
+
 run_batch() {
   local batch_name="$1"; shift
   echo "== $batch_name =="
@@ -42,6 +56,7 @@ node --check scripts/generate-sport-schema.js
 node --check scripts/generate-competition-schema.js
 node --check scripts/verify-release.mjs
 node --check scripts/smoke-production.mjs
+node --check scripts/live-account-smoke.mjs
 
 echo '== Registry/schema sync =='
 node scripts/generate-sport-schema.js --check
