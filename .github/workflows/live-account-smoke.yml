@@ -4,7 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       mutate:
-        description: 'Create a throwaway TENX Smoke team and run the two-session revision-conflict test'
+        description: 'Create a throwaway TENX Smoke team and run the revision-conflict test'
+        required: true
+        default: false
+        type: boolean
+      guardian:
+        description: 'Also invite a second synthetic adult and verify guardian role boundaries (requires mutate)'
         required: true
         default: false
         type: boolean
@@ -30,13 +35,23 @@ jobs:
         env:
           TEAM_APP_SMOKE_EMAIL: ${{ secrets.TEAM_APP_SMOKE_EMAIL }}
           TEAM_APP_SMOKE_PASSWORD: ${{ secrets.TEAM_APP_SMOKE_PASSWORD }}
+          TEAM_APP_SMOKE_GUARDIAN_EMAIL: ${{ secrets.TEAM_APP_SMOKE_GUARDIAN_EMAIL }}
+          TEAM_APP_SMOKE_GUARDIAN_PASSWORD: ${{ secrets.TEAM_APP_SMOKE_GUARDIAN_PASSWORD }}
+          RUN_GUARDIAN: ${{ inputs.guardian }}
         run: |
           test -n "$TEAM_APP_SMOKE_EMAIL" || { echo 'Missing TEAM_APP_SMOKE_EMAIL secret'; exit 1; }
           test -n "$TEAM_APP_SMOKE_PASSWORD" || { echo 'Missing TEAM_APP_SMOKE_PASSWORD secret'; exit 1; }
+          if [ "$RUN_GUARDIAN" = "true" ]; then
+            test -n "$TEAM_APP_SMOKE_GUARDIAN_EMAIL" || { echo 'Missing TEAM_APP_SMOKE_GUARDIAN_EMAIL secret'; exit 1; }
+            test -n "$TEAM_APP_SMOKE_GUARDIAN_PASSWORD" || { echo 'Missing TEAM_APP_SMOKE_GUARDIAN_PASSWORD secret'; exit 1; }
+          fi
 
       - name: Run live synthetic account smoke
         env:
           TEAM_APP_SMOKE_EMAIL: ${{ secrets.TEAM_APP_SMOKE_EMAIL }}
           TEAM_APP_SMOKE_PASSWORD: ${{ secrets.TEAM_APP_SMOKE_PASSWORD }}
+          TEAM_APP_SMOKE_GUARDIAN_EMAIL: ${{ secrets.TEAM_APP_SMOKE_GUARDIAN_EMAIL }}
+          TEAM_APP_SMOKE_GUARDIAN_PASSWORD: ${{ secrets.TEAM_APP_SMOKE_GUARDIAN_PASSWORD }}
           TEAM_APP_SMOKE_MUTATE: ${{ inputs.mutate }}
+          TEAM_APP_SMOKE_GUARDIAN: ${{ inputs.guardian }}
         run: npm run smoke:account
