@@ -18,6 +18,7 @@
     "verify:pages-functions": "rm -rf .wrangler-pages-functions && mkdir -p .wrangler-pages-functions && npx wrangler pages functions build functions --outfile .wrangler-pages-functions/index.js --project-directory .",
     "verify:worker": "npx wrangler deploy --dry-run --config worker/wrangler.jsonc --outdir .wrangler-dry-run",
     "smoke:prod": "node scripts/smoke-production.mjs",
+    "smoke:account": "node scripts/live-account-smoke.mjs",
     "gate": "bash scripts/local-release-gate.sh",
     "safe-push": "bash scripts/safe-push.sh"
   },
