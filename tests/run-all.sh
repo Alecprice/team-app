@@ -57,6 +57,7 @@ node --check scripts/generate-competition-schema.js
 node --check scripts/verify-release.mjs
 node --check scripts/smoke-production.mjs
 node --check scripts/live-account-smoke.mjs
+python3 -m py_compile scripts/live-pwa-smoke.py
 
 echo '== Registry/schema sync =='
 node scripts/generate-sport-schema.js --check
