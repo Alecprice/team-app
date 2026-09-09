@@ -1,4 +1,7 @@
 import {config} from './config.js';
+import {fetchWithTimeout} from './fetch-timeout.js';
+
+const EMAIL_TIMEOUT_MS=8000;
 
 export async function sendEmail({to,subject,html,text}){
   if(!config.resendApiKey){
@@ -8,11 +11,11 @@ export async function sendEmail({to,subject,html,text}){
     }
     throw new Error('RESEND_API_KEY is not configured');
   }
-  const response=await fetch('https://api.resend.com/emails',{
+  const response=await fetchWithTimeout(fetch,'https://api.resend.com/emails',{
     method:'POST',
     headers:{Authorization:`Bearer ${config.resendApiKey}`,'Content-Type':'application/json'},
     body:JSON.stringify({from:config.emailFrom,to:[to],subject,html,text})
-  });
+  },EMAIL_TIMEOUT_MS);
   if(!response.ok)throw new Error(`Email provider returned ${response.status}`);
   return {mode:'resend',...(await response.json())};
 }
