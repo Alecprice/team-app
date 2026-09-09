@@ -8,5 +8,28 @@
   async function get(teamId,fileId){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).get(storageKey(teamId,fileId));req.onsuccess=()=>{db.close();resolve(req.result||null);};req.onerror=()=>{db.close();reject(req.error);};});}
   async function remove(teamId,fileId){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(storageKey(teamId,fileId));tx.oncomplete=()=>{db.close();resolve(true);};tx.onerror=()=>{db.close();reject(tx.error);};});}
   async function removeTeam(teamId){const db=await openDb(),accountId=account();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');const store=tx.objectStore(STORE);const req=store.openCursor();req.onsuccess=()=>{const c=req.result;if(c){if(c.value.accountId===accountId&&c.value.teamId===teamId)c.delete();c.continue();}};tx.oncomplete=()=>{db.close();resolve(true);};tx.onerror=()=>{db.close();reject(tx.error);};});}
-  root.TEAM_APP_FILE_STORE={put,get,remove,removeTeam};
+  async function migrateUnclaimed(userId){
+    const accountId=String(userId||'').trim();if(!accountId)throw new Error('Account id required for local file migration');
+    const db=await openDb();return new Promise((resolve,reject)=>{
+      const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);let moved=0;
+      const req=store.openCursor();
+      req.onsuccess=()=>{
+        const cursor=req.result;if(!cursor)return;
+        const value=cursor.value;
+        if(value?.accountId!=='unclaimed'){cursor.continue();return;}
+        const targetKey=`${accountId}:${value.teamId}:${value.fileId}`;
+        const target=store.get(targetKey);
+        target.onsuccess=()=>{
+          if(!target.result){store.put({...value,key:targetKey,accountId});moved+=1;}
+          cursor.delete();cursor.continue();
+        };
+        target.onerror=()=>tx.abort();
+      };
+      req.onerror=()=>tx.abort();
+      tx.oncomplete=()=>{db.close();resolve(moved);};
+      tx.onerror=()=>{const error=tx.error||new Error('Could not migrate local files');db.close();reject(error);};
+      tx.onabort=()=>{const error=tx.error||new Error('Could not migrate local files');db.close();reject(error);};
+    });
+  }
+  root.TEAM_APP_FILE_STORE={put,get,remove,removeTeam,migrateUnclaimed};
 })(typeof globalThis!=='undefined'?globalThis:this);
