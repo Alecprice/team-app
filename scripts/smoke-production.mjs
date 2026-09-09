@@ -82,7 +82,12 @@ if (sw) {
   for (const needle of ['./core/cloud-queue.js','./core/connectivity-status.js','./core/connectivity-status.css','./core/hardening-runtime.js','./core/hardening-runtime.css']) {
     if (sw.body.includes(needle)) pass(`service worker precaches ${needle}`);else fail(`service worker does not precache ${needle}`);
   }
-  if(sw.body.includes("url.searchParams.has('invite')"))pass('service worker rejects sensitive invite navigation cache keys');else fail('service worker sensitive-navigation guard missing');
+  for(const needle of ['SENSITIVE_QUERY_KEYS','hasSensitiveQuery(url)','if(sensitive){']){
+    if(sw.body.includes(needle))pass(`service worker sensitive-query policy includes ${needle}`);else fail(`service worker sensitive-query policy is missing ${needle}`);
+  }
+  for(const key of ['invite_token','access_token','join_code','session_token','authorization','secret']){
+    if(sw.body.includes(`'${key}'`))pass(`service worker protects ${key} query keys`);else fail(`service worker sensitive-query set is missing ${key}`);
+  }
 }
 
 const manifest = await get('/manifest.webmanifest');
