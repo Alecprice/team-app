@@ -7,7 +7,7 @@
   const ACCOUNT_MARKER='team-app-last-auth-user';
   const channel=('BroadcastChannel' in root)?new BroadcastChannel('team-app-v1.10'):null;
   const rawStorage=root.Storage?.prototype?{get:root.Storage.prototype.getItem,set:root.Storage.prototype.setItem,remove:root.Storage.prototype.removeItem}:null;
-  let focusReturn=null,focusReturnId='',activeDialog=null,filterSeq=0,syncPatched=false,reloadForAccount=false;
+  let focusReturn=null,focusReturnId='',activeDialog=null,filterSeq=0,syncPatched=false,reloadForAccount=false,accountMigrationUser='';
 
   function dispatch(name,detail={}){try{root.dispatchEvent(new CustomEvent(name,{detail}));}catch{}}
   function hash(value){const text=JSON.stringify(value);let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}return `${text.length}:${(h>>>0).toString(16)}`;}
@@ -46,12 +46,24 @@
       if(!existing&&unclaimed)rawSet(target,unclaimed);
     }
   }
-  function reconcileAccountNamespace(){
-    if(DEMO||!cloudPresent())return;const userId=root.TeamAppCloud.session?.user?.id||null;if(!userId)return;if(tabAccount===String(userId))return;
-    const previousAccount=tabAccount;
-    if(!previousAccount)migrateUnclaimedState(String(userId));
-    if(!rawSet(ACCOUNT_MARKER,userId))return;tabAccount=String(userId);channel?.postMessage({type:'account-change',account:String(userId),previousAccount,at:Date.now()});
+  function finishAccountNamespace(userId,previousAccount){
+    if(!rawSet(ACCOUNT_MARKER,userId))return;
+    tabAccount=String(userId);channel?.postMessage({type:'account-change',account:String(userId),previousAccount,at:Date.now()});
     const key='team-app-account-reload';try{if(root.sessionStorage.getItem(key)!==String(userId)){root.sessionStorage.setItem(key,String(userId));reloadForAccount=true;root.location.reload();}}catch{}
+  }
+  function reconcileAccountNamespace(){
+    if(DEMO||!cloudPresent())return;const userId=root.TeamAppCloud.session?.user?.id||null;if(!userId)return;const nextAccount=String(userId);if(tabAccount===nextAccount||accountMigrationUser===nextAccount)return;
+    const previousAccount=tabAccount;
+    if(!previousAccount){
+      migrateUnclaimedState(nextAccount);
+      const migrateFiles=root.TEAM_APP_FILE_STORE?.migrateUnclaimed;
+      if(typeof migrateFiles==='function'){
+        accountMigrationUser=nextAccount;
+        Promise.resolve(migrateFiles(nextAccount)).then(()=>{accountMigrationUser='';finishAccountNamespace(nextAccount,previousAccount);}).catch(error=>{accountMigrationUser='';console.warn('[local file account migration]',error);storageBanner('Local documents could not be moved into your signed-in account yet. Keep this tab open; Team APP will retry without discarding the original files.');});
+        return;
+      }
+    }
+    finishAccountNamespace(nextAccount,previousAccount);
   }
   function updateAuthLock(){
     if(DEMO||!cloudPresent()){document.body.classList.remove('teamapp-auth-locked');return;}const signedIn=Boolean(root.TeamAppCloud.session?.user);document.body.classList.toggle('teamapp-auth-locked',!signedIn);if(signedIn)reconcileAccountNamespace();dispatch('teamapp:cloud-state-change',{signedIn,account:root.TeamAppCloud.session?.user?.id||null});
