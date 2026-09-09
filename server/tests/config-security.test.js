@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sha256,timingSafeHexEqual} from '../src/config.js';
+import {sha256,timingSafeHexEqual} from '../src/crypto-utils.js';
 
 test('timingSafeHexEqual accepts only complete hexadecimal byte strings',()=>{
   const digest=sha256('team-app');
