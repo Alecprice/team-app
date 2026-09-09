@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import path from 'node:path';
+export { sha256, timingSafeHexEqual } from './crypto-utils.js';
 
 function env(name, fallback='') { return process.env[name] ?? fallback; }
 function envInt(name, fallback) { const n=Number(env(name, fallback)); return Number.isFinite(n)?n:fallback; }
@@ -51,7 +52,3 @@ export function authDatabaseUrl(){
 }
 
 export function randomToken(bytes=32){return crypto.randomBytes(bytes).toString('base64url');}
-export function sha256(value){return crypto.createHash('sha256').update(String(value)).digest('hex');}
-export function timingSafeHexEqual(a,b){
-  try{const aa=Buffer.from(String(a),'hex'),bb=Buffer.from(String(b),'hex');return aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);}catch{return false;}
-}
