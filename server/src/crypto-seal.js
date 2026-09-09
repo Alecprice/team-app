@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import {config} from './config.js';
+import {decodeBase64Key} from './base64-key.js';
 
 function key(){
-  if(config.dataKey){const b=Buffer.from(config.dataKey,'base64');if(b.length===32)return b;throw new Error('TEAM_APP_DATA_KEY must decode to exactly 32 bytes');}
+  if(config.dataKey){const b=decodeBase64Key(config.dataKey,32);if(b)return b;throw new Error('TEAM_APP_DATA_KEY must be canonical base64 for exactly 32 bytes');}
   if(config.nodeEnv!=='production'&&config.authSecret)return crypto.createHash('sha256').update(`dev-data-key:${config.authSecret}`).digest();
   throw new Error('TEAM_APP_DATA_KEY is not configured');
 }
