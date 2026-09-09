@@ -4,6 +4,7 @@ import {sha256,timingSafeHexEqual} from '../src/crypto-utils.js';
 
 test('timingSafeHexEqual accepts only complete hexadecimal byte strings',()=>{
   const digest=sha256('team-app');
+  assert.match(digest,/^[0-9a-f]{64}$/);
   assert.equal(timingSafeHexEqual(digest,digest),true);
   assert.equal(timingSafeHexEqual(digest,digest.toUpperCase()),true);
   assert.equal(timingSafeHexEqual(digest,sha256('different')),false);
