@@ -9,5 +9,6 @@ node tests/sport-registry.test.js
 node tests/competition-profiles.test.js
 node tests/core-runtime.test.js
 node tests/static-contract.test.js
+node tests/service-worker-cache-security.test.js
 node tests/schema-contract.test.js
 node tests/state-contract.test.js
