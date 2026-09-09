@@ -28,8 +28,10 @@ test('V1.10.1 database hardening migration preserves one client RPC and adds lif
 test('runtime hardening is loaded before main app and sensitive PWA navigation is normalized',()=>{
   const html=read('index.html'),sw=read('sw.js'),runtime=read('core/hardening-runtime.js');
   assert.ok(html.indexOf('./core/hardening-runtime.js')<html.indexOf('./app.js'));
-  assert.ok(sw.includes("url.searchParams.has('invite')"));
-  assert.ok(sw.includes("const SHELL_KEY='./index.html'"));
+  for(const token of [
+    'SENSITIVE_QUERY_KEYS','hasSensitiveQuery(url)',"'invite'","'invite_token'","'join_code'","'access_token'","'recovery_token'","'code'",
+    "const SHELL_KEY='./index.html'",'if(res.ok&&!sensitive)','if(sensitive)'
+  ]) assert.ok(sw.includes(token),`missing sensitive PWA cache boundary: ${token}`);
   assert.ok(runtime.includes("DEMO_PREFIX='team-app-demo:'"));
   assert.ok(runtime.includes('team-app-account:'));
   assert.ok(runtime.includes('migrateUnclaimedState'));
