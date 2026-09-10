@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import {config} from './config.js';
 import {query} from './db.js';
+import {PUSH_SEND_OPTIONS,cleanupExpiredPush} from './push-delivery.js';
 
 let configured=false;
 function ensurePush(){
@@ -20,8 +21,14 @@ export async function sendPushToUsers(userIds,{title,body,payload={}}){
   const {rows}=await query(`select id,user_id,endpoint,p256dh,auth from push_subscriptions where user_id=any($1::uuid[])`,[userIds]);
   let sent=0,failed=0;
   await Promise.all(rows.map(async row=>{
-    try{await webpush.sendNotification({endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth}},JSON.stringify({title,body,...payload}));sent++;}
-    catch(err){failed++;if(err?.statusCode===404||err?.statusCode===410)await query('delete from push_subscriptions where id=$1',[row.id]);}
+    try{
+      await webpush.sendNotification({endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth}},JSON.stringify({title,body,...payload}),PUSH_SEND_OPTIONS);
+      sent++;
+    }
+    catch(err){
+      failed++;
+      await cleanupExpiredPush(err,()=>query('delete from push_subscriptions where id=$1',[row.id]));
+    }
   }));
   return {sent,failed,disabled:false};
 }
