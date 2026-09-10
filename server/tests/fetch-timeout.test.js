@@ -12,13 +12,18 @@ test('bounded fetch preserves successful responses and supplies an abort signal'
 });
 
 test('bounded fetch aborts stalled providers with a stable timeout code',async()=>{
-  const stalled=async(_input,init)=>new Promise((resolve,reject)=>{
-    init.signal.addEventListener('abort',()=>reject(new Error('aborted')), {once:true});
-  });
-  await assert.rejects(
-    fetchWithTimeout(stalled,'https://example.test',{},5),
-    error=>error?.code==='request_timeout'&&error?.message==='Request timed out'
-  );
+  const keepAlive=setTimeout(()=>{},100);
+  try{
+    const stalled=async(_input,init)=>new Promise((resolve,reject)=>{
+      init.signal.addEventListener('abort',()=>reject(new Error('aborted')), {once:true});
+    });
+    await assert.rejects(
+      fetchWithTimeout(stalled,'https://example.test',{},5),
+      error=>error?.code==='request_timeout'&&error?.message==='Request timed out'
+    );
+  }finally{
+    clearTimeout(keepAlive);
+  }
 });
 
 test('bounded fetch rejects invalid timeout configuration before network work',async()=>{
