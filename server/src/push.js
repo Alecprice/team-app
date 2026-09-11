@@ -2,6 +2,7 @@ import webpush from 'web-push';
 import {config} from './config.js';
 import {query} from './db.js';
 import {PUSH_SEND_OPTIONS,cleanupExpiredPush,summarizePushDeliveries} from './push-delivery.js';
+import {normalizePushRegistration} from './push-subscription.js';
 
 let configured=false;
 function ensurePush(){
@@ -10,10 +11,11 @@ function ensurePush(){
   webpush.setVapidDetails(config.vapidSubject,config.vapidPublicKey,config.vapidPrivateKey);configured=true;return true;
 }
 export async function registerPush(userId,subscription,userAgent=''){
-  const endpoint=subscription?.endpoint,p256dh=subscription?.keys?.p256dh,authKey=subscription?.keys?.auth;
-  if(!endpoint||!p256dh||!authKey)throw new Error('Invalid push subscription');
+  const normalized=normalizePushRegistration(subscription,userAgent);
+  if(!normalized)throw new Error('Invalid push subscription');
+  const {endpoint,p256dh,auth:authKey,userAgent:normalizedUserAgent}=normalized;
   await query(`insert into push_subscriptions(user_id,endpoint,p256dh,auth,user_agent) values($1,$2,$3,$4,$5)
-    on conflict(user_id,endpoint) do update set p256dh=excluded.p256dh,auth=excluded.auth,user_agent=excluded.user_agent,updated_at=now()`,[userId,endpoint,p256dh,authKey,userAgent]);
+    on conflict(user_id,endpoint) do update set p256dh=excluded.p256dh,auth=excluded.auth,user_agent=excluded.user_agent,updated_at=now()`,[userId,endpoint,p256dh,authKey,normalizedUserAgent]);
 }
 export async function sendPushToUsers(userIds,{title,body,payload={}}){
   if(!userIds.length)return {sent:0,failed:0,deliveredUserIds:[],disabled:!ensurePush()};
